@@ -24,5 +24,7 @@
             "ua": "okhttp/3.15",
             "epg": "https://epg.112114.eu.org/?ch={name}&date={date}"
         }
-    ]
+    ],
+    "update_seq": 1,
+    "last_update": "2026-06-15 18:55:19.612602"
 }
