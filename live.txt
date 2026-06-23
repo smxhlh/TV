@@ -19,12 +19,12 @@
         {
             "name": "直播3",
             "type": 0,
-            "url": "https://eastscreen.tv/iptvlist.php?token=LlNCBx0AAgseAwILVFBBAQkJCQAI",
+            "url": "https://eastscreen.tv/iptvlist.php?token=LlNCBx0AAgoeAAcWS1JEDAAEBw4",
             "playerType": 1,
             "ua": "okhttp/3.15",
             "epg": "https://epg.112114.eu.org/?ch={name}&date={date}"
         }
     ],
-    "update_seq": 19,
-    "last_update": "2026-06-22 14:00:23.852903"
+    "update_seq": 20,
+    "last_update": "2026-06-23 08:08:08.037536"
 }
