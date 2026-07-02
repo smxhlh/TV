@@ -3,7 +3,7 @@
         {
             "name": "直播1",
             "type": 0,
-            "url": "https://eastscreen.tv/iptvlist.php?token=LlpHGAIDABYCBgQWTFBIBwECBQ",
+            "url": "https://eastscreen.tv/iptvlist.php?token=LlNDAB0DHwkJCx8ASVhDBAAF",
             "playerType": 1,
             "ua": "okhttp/3.15",
             "epg": "https://epg.112114.eu.org/?ch={name}&date={date}"
@@ -19,12 +19,12 @@
         {
             "name": "直播3",
             "type": 0,
-            "url": "https://eastscreen.tv/iptvlist.php?token=LlNDBh0DBQweAwIBVFBGDwkGBgAI",
+            "url": "https://eastscreen.tv/iptvlist.php?token=LlRCGAIHCRYBAgkWQ1ZIBwECBQ",
             "playerType": 1,
             "ua": "okhttp/3.15",
             "epg": "https://epg.112114.eu.org/?ch={name}&date={date}"
         }
     ],
-    "update_seq": 34,
-    "last_update": "2026-07-02 08:02:26.655395"
+    "update_seq": 35,
+    "last_update": "2026-07-02 08:28:22.924730"
 }
