@@ -25,6 +25,6 @@
             "epg": "https://epg.112114.eu.org/?ch={name}&date={date}"
         }
     ],
-    "update_seq": 33,
-    "last_update": "2026-07-01 14:00:37.029660"
+    "update_seq": 34,
+    "last_update": "2026-07-02 08:02:26.655395"
 }
