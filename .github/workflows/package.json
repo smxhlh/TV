@@ -1,8 +1,0 @@
-{
-  "name": "guazikan-tv-spider",
-  "version": "1.0.0",
-  "dependencies": {
-    "axios": "^1.7.0",
-    "cheerio": "^1.0.0-rc.12"
-  }
-}
