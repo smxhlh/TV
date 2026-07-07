@@ -18,9 +18,23 @@ const categoryMap = [
   { name: "榜单", type: "61", url: "https://guazikan.com/top" }
 ];
 
-// 通用抓取单分类页面函数
-async function getCategoryList(targetUrl) {
-  const res = await axios.get(targetUrl, { headers, timeout: 15000 });
+// 增加请求重试封装，解决Actions云端超时
+async function safeGet(url, opt, retry = 3) {
+  try {
+    return await axios.get(url, opt);
+  } catch (e) {
+    if (retry > 0) {
+      console.log(`请求失败，剩余重试次数${retry - 1}，2秒后重试`);
+      await new Promise(r => setTimeout(r, 2000));
+      return safeGet(url, opt, retry - 1);
+    }
+    throw e;
+  }
+}
+
+// 通用抓取单页影片函数
+async function getPageList(targetUrl) {
+  const res = await safeGet(targetUrl, { headers, timeout: 15000 });
   const $ = cheerio.load(res.data);
   const list = [];
 
@@ -59,13 +73,22 @@ async function getCategoryList(targetUrl) {
   return list;
 }
 
+// 抓取全部分类所有分页（这里默认只抓第1页，可自行扩展循环pg）
+async function getCategoryAll(targetUrl) {
+  const all = [];
+  // 仅抓取第1页，如需多页改为循环pg=1,2,3...
+  const pageData = await getPageList(targetUrl);
+  all.push(...pageData);
+  return all;
+}
+
 // 主函数：遍历所有分类抓取
 async function main() {
   const allCategoryData = {};
   for (const item of categoryMap) {
     console.log(`正在抓取【${item.name}】地址：${item.url}`);
     try {
-      const data = await getCategoryList(item.url);
+      const data = await getCategoryAll(item.url);
       allCategoryData[item.type] = data;
       console.log(`【${item.name}】抓取成功，共${data.length}部影片`);
     } catch (err)
@@ -74,12 +97,10 @@ async function main() {
     }
   }
 
-  // 生成TV标准配置文件（完全匹配OK影视格式）
+  // 【修复核心冲突】静态片单模式 type=0，删除所有动态API字段
   const tvSourceConfig = {
     "name": "瓜仔看影视",
-    "type": 1,
-    "api": "https://guazikan.com",
-    "backupApi": "https://guazikan.com",
+    "type": 0,
     "headers": {
         "User-Agent": "Mozilla/5.0 (Linux; Android TV 11) TVBox/OKYS",
         "Origin": "https://guazikan.com",
@@ -90,16 +111,13 @@ async function main() {
         "Accept": "*/*",
         "Accept-Language": "zh-CN,zh;q=0.9"
     },
-    "searchUrl": "/pro/vod?pg={page}&wd={kw}",
-    "categoryUrl": "/pro/vod?pg={page}&type={type}",
-    "detailUrl": "/play?id={id}",
-    "pageParam": "pg",
     "categoryMap": categoryMap,
     "vodIdField": "vod_id",
     "vodNameField": "vod_name",
     "vodPicField": "vod_pic",
     "vodRemarkField": "vod_remarks",
     "playUrlReg": "https://.*\\.m3u8",
+    "detailUrl": "/play/{id}",
     "staticList": allCategoryData
   };
 
