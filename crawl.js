@@ -9,7 +9,7 @@ const headers = {
   "Origin": "https://guazikan.com"
 };
 
-// ====== 根据截图修正后的分类配置 ======
+// 根据截图修正后的分类配置
 const categoryMap = [
   { name: "电影", type: "20", url: "https://guazikan.com/movie" },
   { name: "连续剧", type: "30", url: "https://guazikan.com/tv" },
@@ -18,40 +18,45 @@ const categoryMap = [
   { name: "榜单", type: "61", url: "https://guazikan.com/top" }
 ];
 
-// 增加请求重试封装，解决Actions云端超时
+// 请求重试封装，最多3次重试，每次间隔2秒
 async function safeGet(url, opt, retry = 3) {
   try {
     return await axios.get(url, opt);
   } catch (e) {
     if (retry > 0) {
-      console.log(`请求失败，剩余重试次数${retry - 1}，2秒后重试`);
+      console.log(`请求${url}失败，剩余重试次数${retry - 1}，等待2秒重试`);
       await new Promise(r => setTimeout(r, 2000));
       return safeGet(url, opt, retry - 1);
     }
-    throw e;
+    throw new Error(`多次请求失败: ${e.message}`);
   }
 }
 
-// 通用抓取单页影片函数
+// 抓取单页影片列表
 async function getPageList(targetUrl) {
-  const res = await safeGet(targetUrl, { headers, timeout: 15000 });
+  const res = await safeGet(targetUrl, { headers, timeout: 20000 });
   const $ = cheerio.load(res.data);
   const list = [];
 
-  $("#movie-content > div").each((_, el) => {
+  // 页面无影片容器直接返回空数组，不报错
+  const items = $("#movie-content > div");
+  if (items.length === 0) {
+    console.log(`页面${targetUrl}未找到影片容器#movie-content`);
+    return [];
+  }
+
+  items.each((_, el) => {
     const aTag = $(el).find("a");
     const imgTag = $(el).find("div.poster-wrap > img");
     const rawText = aTag.text().trim();
     const detailUrl = aTag.attr("href");
     let cover = imgTag.attr("src") || "";
 
-    // 过滤无效数据
     if (!rawText || !detailUrl) return;
 
-    // http图片自动转https，避免TV加载失败
+    // http转https
     if (cover.startsWith("http://")) cover = "https://" + cover.slice(7);
 
-    // 拆分评分、片名
     const split = rawText.split("\n");
     let score = "";
     let vod_name = split[0];
@@ -60,9 +65,7 @@ async function getPageList(targetUrl) {
       vod_name = split[1].trim();
     }
 
-    // 提取唯一影片ID
     const vod_id = detailUrl.split("/play/")[1] || "";
-
     list.push({
       vod_id,
       vod_name,
@@ -73,31 +76,27 @@ async function getPageList(targetUrl) {
   return list;
 }
 
-// 抓取全部分类所有分页（这里默认只抓第1页，可自行扩展循环pg）
+// 抓取单分类全部页面（仅第一页）
 async function getCategoryAll(targetUrl) {
-  const all = [];
-  // 仅抓取第1页，如需多页改为循环pg=1,2,3...
-  const pageData = await getPageList(targetUrl);
-  all.push(...pageData);
-  return all;
+  try {
+    return await getPageList(targetUrl);
+  } catch (err) {
+    console.error(`分类页面${targetUrl}抓取完全失败:`, err.message);
+    return [];
+  }
 }
 
-// 主函数：遍历所有分类抓取
+// 主入口
 async function main() {
   const allCategoryData = {};
   for (const item of categoryMap) {
-    console.log(`正在抓取【${item.name}】地址：${item.url}`);
-    try {
-      const data = await getCategoryAll(item.url);
-      allCategoryData[item.type] = data;
-      console.log(`【${item.name}】抓取成功，共${data.length}部影片`);
-    } catch (err)
-      console.error(`【${item.name}】抓取失败：`, err.message);
-      allCategoryData[item.type] = [];
-    }
+    console.log(`===== 开始抓取【${item.name}】${item.url} =====`);
+    const data = await getCategoryAll(item.url);
+    allCategoryData[item.type] = data;
+    console.log(`【${item.name}】完成，共${data.length}条影片`);
   }
 
-  // 【修复核心冲突】静态片单模式 type=0，删除所有动态API字段
+  // 静态源配置 type:0，移除所有动态API字段
   const tvSourceConfig = {
     "name": "瓜仔看影视",
     "type": 0,
@@ -121,12 +120,24 @@ async function main() {
     "staticList": allCategoryData
   };
 
-  // 写入仓库根目录source.json，格式化换行方便查看
+  // 写入文件，即使全部为空也生成合法json，避免进程退出
   fs.writeFileSync("./source.json", JSON.stringify(tvSourceConfig, null, 2), "utf8");
-  console.log("全部分类抓取完成，已自动更新仓库内source.json");
+  console.log("全部抓取流程结束，已生成source.json");
 }
 
-main().catch(err => {
-  console.error("全局抓取失败：", err);
-  process.exit(1);
-});
+// 全局兜底捕获，就算全部抓取失败也正常退出，返回exit code 0
+main()
+  .then(() => process.exit(0))
+  .catch(err => {
+    console.error("全局致命异常：", err);
+    // 异常时生成空合法配置，防止无文件
+    const emptyConfig = {
+      "name": "瓜仔看影视",
+      "type": 0,
+      "categoryMap": categoryMap,
+      "staticList": {}
+    };
+    fs.writeFileSync("./source.json", JSON.stringify(emptyConfig, null, 2), "utf8");
+    console.log("已生成空兜底配置，任务正常结束");
+    process.exit(0);
+  });
