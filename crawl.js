@@ -80,7 +80,7 @@ async function getPageList(targetUrl) {
 async function getCategoryAll(targetUrl) {
   try {
     return await getPageList(targetUrl);
-  } catch (err) {
+  } catch (err)
     console.error(`分类页面${targetUrl}抓取完全失败:`, err.message);
     return [];
   }
@@ -120,17 +120,17 @@ async function main() {
     "staticList": allCategoryData
   };
 
-  // 写入文件，即使全部为空也生成合法json，避免进程退出
+  // 写入文件，格式化JSON
   fs.writeFileSync("./source.json", JSON.stringify(tvSourceConfig, null, 2), "utf8");
   console.log("全部抓取流程结束，已生成source.json");
 }
 
-// 全局兜底捕获，就算全部抓取失败也正常退出，返回exit code 0
+// 全局兜底捕获，无论成功失败都正常退出0
 main()
   .then(() => process.exit(0))
   .catch(err => {
-    console.error("全局致命异常：", err);
-    // 异常时生成空合法配置，防止无文件
+    console.error("全局抓取异常：", err);
+    // 异常兜底生成空配置，保证文件存在
     const emptyConfig = {
       "name": "瓜仔看影视",
       "type": 0,
@@ -138,6 +138,6 @@ main()
       "staticList": {}
     };
     fs.writeFileSync("./source.json", JSON.stringify(emptyConfig, null, 2), "utf8");
-    console.log("已生成空兜底配置，任务正常结束");
+    console.log("已生成兜底空配置，任务正常结束");
     process.exit(0);
   });
