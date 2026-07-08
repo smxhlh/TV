@@ -1,10 +1,10 @@
 import requests
 import re
-from datetime datetime
+from datetime import datetime
 
 # ===================== 全局配置 =====================
 M3U_URL = "https://z.szyyds.cn/iptv"
-# 合并单一输出文件
+# 仅输出单个合并文件
 OUTPUT_ALL = "iptv_all.txt"
 
 HEADERS = {
@@ -60,24 +60,23 @@ def parse_m3u(raw_text: str):
             if play_url in url_unique:
                 continue
             url_unique.add(play_url)
-            # 执行分类
             classify_channel(current_name, play_url)
 
 def classify_channel(name: str, url: str):
-    """频道分类，仅保存频道+url，写入时统一拼接分类头部"""
+    """频道分类，仅保存频道+url"""
     # 1.央视优先
     if CCTV_REG.search(name):
         cctv_data.append(f"{name},{url}")
         return
-    # 2.河南地方台
-    for hn_name in HENAN_CHANNELS:
-        if hn_name in name:
-            henan_data.append(f"{name},{url}")
-            return
-    # 3.影视类
+    # 2.影视类
     for mv_word in MOVIE_KEYS:
         if mv_word in name:
             movie_data.append(f"{name},{url}")
+            return
+    # 3.河南地方台
+    for hn_name in HENAN_CHANNELS:
+        if hn_name in name:
+            henan_data.append(f"{name},{url}")
             return
     # 4.卫视
     if WEISHI_KEY in name:
@@ -86,7 +85,7 @@ def classify_channel(name: str, url: str):
     # 不匹配四类直接丢弃
 
 def save_merge_file():
-    """生成单一合并txt，按分类分段，头部格式 分类,#genre#"""
+    """生成单一合并txt，顺序：央视 → 影视 → 河南地方 → 卫视"""
     now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     content = f"# IPTV全部分类源 更新时间：{now}\n\n"
 
@@ -94,22 +93,22 @@ def save_merge_file():
     content += "央视频道,#genre#\n"
     content += "\n".join(cctv_data) + "\n\n"
 
-    # 2.影视频道
+    # 2.影视
     content += "影视,#genre#\n"
-    content += "\n".join(movie_data) + "\n"
+    content += "\n".join(movie_data) + "\n\n"
 
-    # 3.河南地方
+    # 3.河南频道
     content += "河南频道,#genre#\n"
     content += "\n".join(henan_data) + "\n\n"
 
     # 4.卫视频道
     content += "卫视频道,#genre#\n"
-    content += "\n".join(weishi_data) + "\n\n"
+    content += "\n".join(weishi_data) + "\n"
 
     with open(OUTPUT_ALL, "w", encoding="utf-8") as f:
         f.write(content)
     print(f"合并文件生成完成：{OUTPUT_ALL}")
-    print(f"央视：{len(cctv_data)} 河南：{len(henan_data)} 卫视：{len(weishi_data)} 影视：{len(movie_data)}")
+    print(f"央视：{len(cctv_data)} 影视：{len(movie_data)} 河南：{len(henan_data)} 卫视：{len(weishi_data)}")
 
 def main():
     print("===== M3U IPTV 单文件分类工具 =====")
