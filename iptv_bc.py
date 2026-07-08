@@ -5,6 +5,7 @@ import platform
 import time
 import random
 import json
+import requests
 from datetime import datetime
 import subprocess
 from selenium import webdriver
@@ -12,26 +13,33 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
 from selenium.common.exceptions import TimeoutException, WebDriverException
 
-# ===================== 全局配置（无代理优化版） =====================
+# ===================== 全局配置（代理池增强版） =====================
 PROXY_URL = "http://tonkiang.us/iptvproxy.php"
 CHANNEL_BASE = "http://tonkiang.us/channellist.html"
 MAX_SAVE_GROUP = 3
-WAIT_TIME = 120    # 延长页面等待至120秒，网络慢容错
+WAIT_TIME = 120
 SLEEP_LONG_MIN = 6
 SLEEP_LONG_MAX = 12
 SLEEP_SHORT_MIN = 2
 SLEEP_SHORT_MAX = 5
-RETRY_TIMES = 3    # 增加重试次数
+RETRY_TIMES = 3
 LOOP_WAIT_INTERVAL = 3
 MAX_LOOP_WAIT = 10
-# 随机UA池，规避固定UA被封禁
+
+# 随机UA池
 UA_LIST = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/132.0.0 Safari/537.36",
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/130.0.0 Safari/537.36",
     "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/128.0.0 Safari/537.36"
 ]
 
-# 路径配置（GitHub Actions）
+# 公开免费代理API源（无需key，自动拉取）
+PROXY_API_LIST = [
+    "https://api.proxyscrape.com/v2/?request=displayproxies&protocol=http&timeout=10000&country=all&ssl=all&anonymity=all",
+    "https://raw.githubusercontent.com/jetkai/proxy-list/main/online-proxies/txt/proxies-http.txt"
+]
+
+# 路径配置
 def get_workspace_paths():
     WORKSPACE = os.getenv("GITHUB_WORKSPACE", os.getcwd())
     LIVE_FILE_LOCAL = os.path.join(WORKSPACE, "live.txt")
@@ -42,7 +50,7 @@ def get_workspace_paths():
 
 LIVE_FILE_LOCAL, GIT_REPO_DIR, GIT_TARGET_FILE, LOG_FILE_PATH = get_workspace_paths()
 
-# 失效关键字，区分【拦截关键字】和普通失效关键字
+# 拦截/失效关键字区分
 BLOCK_KEYWORDS = {"这是一个境外网页", "当前无法访问"}
 INVALID_KEYWORDS = {
     "已经失效", "重新订阅", "欢迎来到", "提供订阅",
@@ -50,7 +58,31 @@ INVALID_KEYWORDS = {
 }
 ALL_INVALID = BLOCK_KEYWORDS.union(INVALID_KEYWORDS)
 
-# ===================== 工具函数 =====================
+# ===================== 代理池工具函数 =====================
+def get_public_proxy_pool() -> list:
+    """从公开API拉取免费HTTP代理，返回 [http://ip:port] 列表"""
+    proxy_pool = []
+    headers = {"User-Agent": random.choice(UA_LIST)}
+    for api in PROXY_API_LIST:
+        try:
+            resp = requests.get(api, headers=headers, timeout=15)
+            resp.raise_for_status()
+            raw = resp.text.strip()
+            lines = raw.splitlines()
+            for line in lines:
+                line = line.strip()
+                if re.match(r"\d+\.\d+\.\d+\.\d+:\d+", line):
+                    proxy_pool.append(f"http://{line}")
+        except Exception as e:
+            print(f"代理API {api} 获取失败：{str(e)[:50]}")
+            continue
+    # 去重、打乱顺序
+    proxy_pool = list(set(proxy_pool))
+    random.shuffle(proxy_pool)
+    print(f"成功拉取 {len(proxy_pool)} 个公开HTTP代理")
+    return proxy_pool
+
+# ===================== 通用工具函数 =====================
 def log(step_desc):
     print(f"\n【{step_desc}】")
     print("-" * 60)
@@ -137,7 +169,7 @@ def git_push_file():
     finally:
         os.chdir(old_cwd)
 
-# ===================== 链接检测（区分拦截/失效） =====================
+# ===================== 链接检测 =====================
 def check_url_alive(driver, url):
     if not url or not url.startswith(("http://", "https://")):
         print(" 无效链接，判定失效")
@@ -151,7 +183,6 @@ def check_url_alive(driver, url):
             print(" 页面空白，失效")
             return False, False
 
-        # 判断是否被网络拦截
         hit_block = any(k in page_text for k in BLOCK_KEYWORDS)
         if hit_block:
             print(" 命中境外拦截提示，访问被阻断")
@@ -193,25 +224,25 @@ def save_live_json(data):
         print(f"保存失败：{e}")
         return False
 
-# ===================== 浏览器初始化（强伪装无代理版） =====================
-def init_browser():
+# ===================== 浏览器初始化（支持传入代理） =====================
+def init_browser(proxy_addr=None):
     chrome_options = Options()
-    # 无头模式
     chrome_options.add_argument("--headless=new")
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
     chrome_options.add_argument("--disable-gpu")
     chrome_options.add_argument("--incognito")
-    # 随机UA
     chrome_options.add_argument(f"user-agent={random.choice(UA_LIST)}")
-    # 指纹伪装核心参数
+    # 代理参数
+    if proxy_addr:
+        chrome_options.add_argument(f"--proxy-server={proxy_addr}")
+        print(f"当前浏览器使用代理：{proxy_addr}")
+    # 指纹伪装
     chrome_options.add_argument("--disable-blink-features=AutomationControlled")
     chrome_options.add_argument("--disable-webrtc")
     chrome_options.add_argument("--disable-plugins")
-    chrome_options.add_argument("--disable-software-rasterizer")
     chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
     chrome_options.add_experimental_option("useAutomationExtension", False)
-    # 屏蔽弹窗、通知、自动下载
     prefs = {
         "profile.default_content_setting_values.notifications": 2,
         "profile.default_content_setting_values.popups": 2,
@@ -221,7 +252,6 @@ def init_browser():
 
     service = Service("/usr/bin/chromedriver")
     driver = webdriver.Chrome(service=service, options=chrome_options)
-    # 清除webdriver标记
     driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {
         "source": """
         Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
@@ -229,8 +259,6 @@ def init_browser():
         window.chrome = { runtime: {} };
         """
     })
-    # 关闭导航检测
-    driver.execute_cdp_cmd("Network.setUserAgentOverride", {"userAgent": random.choice(UA_LIST)})
     driver.set_page_load_timeout(WAIT_TIME)
     driver.set_script_timeout(WAIT_TIME)
     driver.implicitly_wait(WAIT_TIME)
@@ -273,18 +301,56 @@ def wait_for_token(driver):
         random_sleep(LOOP_WAIT_INTERVAL, LOOP_WAIT_INTERVAL + 2)
     return None
 
-# ===================== 主程序（拦截不终止，容错增强） =====================
+# ===================== 主程序（代理轮询逻辑） =====================
 def main():
     driver = None
     new_token_list = []
     update_log_content = []
     task_success = True
-    try:
-        print("========== IPTV自动更新（无代理强伪装版） ==========")
-        driver = init_browser()
-        print(" Chromium浏览器启动成功")
-        update_log_content.append("Chromium浏览器启动成功")
+    used_proxy = None
+    proxy_pool = get_public_proxy_pool()
 
+    # 轮询代理，直到成功访问主页或全部代理耗尽
+    for proxy in proxy_pool:
+        try:
+            print(f"\n尝试使用代理：{proxy} 启动浏览器")
+            driver = init_browser(proxy_addr=proxy)
+            update_log_content.append(f"使用代理 {proxy} 启动Chromium")
+            # 测试访问采集主页
+            if safe_get(driver, PROXY_URL):
+                used_proxy = proxy
+                print(f"代理 {proxy} 连通成功，继续采集流程")
+                break
+            else:
+                print(f"代理 {proxy} 访问失败，关闭浏览器切换下一个")
+                driver.quit()
+                driver = None
+                random_sleep(3,5)
+        except Exception as e:
+            print(f"代理 {proxy} 启动浏览器失败：{str(e)[:60]}，切换下一个")
+            if driver:
+                try: driver.quit()
+                except: pass
+            driver = None
+            continue
+
+    # 所有代理全部失效，无代理兜底运行
+    if not driver:
+        print("\n所有公开代理均失效，切换无代理模式兜底")
+        update_log_content.append("全部公开代理失效，使用无代理模式")
+        try:
+            driver = init_browser(proxy_addr=None)
+            update_log_content.append("无代理Chromium启动成功")
+        except Exception as e:
+            err_msg = f"无代理浏览器启动失败：{e}"
+            print(err_msg)
+            update_log_content.append(err_msg)
+            save_live_json(load_live_json())
+            git_push_file()
+            write_last_update_log("\n".join(update_log_content))
+            return
+
+    try:
         log("步骤1：读取本地live.txt")
         live_data = load_live_json()
         live_list = live_data["lives"]
@@ -311,16 +377,7 @@ def main():
             write_last_update_log("\n".join(update_log_content))
             return
 
-        log("步骤3：访问采集主页获取IP/TK")
-        main_page_ok = safe_get(driver, PROXY_URL)
-        if not main_page_ok:
-            print(" 采集主页访问超时/拦截，无法获取新源，保留原有线路直接提交")
-            update_log_content.append("采集主页被网络拦截，无法获取新链接，保留现有线路")
-            save_live_json(live_data)
-            git_push_file()
-            write_last_update_log("\n".join(update_log_content))
-            return
-
+        log("步骤3：获取IP/TK资源")
         ip_tk_list = wait_for_ip_tk(driver)
         if not ip_tk_list:
             print(" 页面未解析到IP/TK，无新链接，保留原有线路")
@@ -332,7 +389,7 @@ def main():
         ip_tk_list = ip_tk_list[:5]
         update_log_content.append(f"获取 {len(ip_tk_list)} 组IP/TK，开始逐个采集")
 
-        log("步骤4：循环采集新播放链接（拦截则跳过当前组）")
+        log("步骤4：循环采集新播放链接")
         for idx, (ip, tk) in enumerate(ip_tk_list, 1):
             if len(new_token_list) >= MAX_SAVE_GROUP:
                 update_log_content.append("已收集足够新链接，停止采集")
@@ -351,7 +408,7 @@ def main():
                 update_log_content.append(f"链接{token_link}已存在，跳过")
             random_sleep(SLEEP_SHORT_MIN, SLEEP_SHORT_MAX)
 
-        log("步骤5：替换失效线路（有新链接才替换）")
+        log("步骤5：替换失效线路")
         if new_token_list:
             replace_num = min(len(need_replace_index), len(new_token_list))
             update_log_content.append(f"共替换 {replace_num} 条失效线路")
@@ -363,17 +420,15 @@ def main():
         else:
             update_log_content.append("本次未采集到可用新链接，保留原有失效线路")
 
-        # 保存文件并推送
         save_live_json(live_data)
         git_res = git_push_file()
         update_log_content.append(f"Git推送结果：{'成功' if git_res else '失败'}")
 
     except Exception as e:
         task_success = False
-        err_msg = f"全局异常：{str(e)}"
+        err_msg = f"全局采集异常：{str(e)}"
         print(err_msg)
         update_log_content.append(err_msg)
-        # 异常兜底：依然保存现有数据并推送，防止仓库清空
         try:
             save_live_json(live_data)
             git_push_file()
@@ -388,9 +443,9 @@ def main():
             except:
                 pass
         write_last_update_log("\n".join(update_log_content))
-        # 不主动抛出异常，避免 exit code=1 阻断流程
         if not task_success:
             print("本次采集存在异常，但已完成兜底保存与推送")
 
 if __name__ == "__main__":
+    # 提前安装requests用于拉取代理池
     main()
