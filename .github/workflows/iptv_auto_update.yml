@@ -1,57 +1,40 @@
 name: IPTV自动更新
-
-# 触发规则：每天6:00和18:00运行（UTC时间，对应北京时间+8小时，所以写0/12点）
 on:
   schedule:
-    - cron: '0 0,12 * * *'  # UTC时间0点=北京时间8点？❌ 修正：UTC时间10点=北京时间18点，UTC时间22点=北京时间6点
-    # 正确时区转换：北京时间6:00 = UTC 22:00；北京时间18:00 = UTC 10:00
-    - cron: '0 22,10 * * *'
-  # 手动触发（可选，方便测试）
+    - cron: '0 22,10 * * *' # 北京时间6点、18点
   workflow_dispatch:
-
-# 工作流权限（必须，用于推送代码）
 permissions:
   contents: write
-
 jobs:
   update-iptv:
-    runs-on: ubuntu-latest  # 使用Ubuntu系统（适配无界面Chrome）
+    runs-on: ubuntu-latest
+    timeout-minutes: 20 # 延长任务超时到20分钟
     steps:
-      # 步骤1：拉取仓库代码
-      - name: 拉取仓库代码
+      - name: 拉取代码
         uses: actions/checkout@v5
 
-      # 步骤2：安装Chrome和ChromeDriver（GitHub Actions Ubuntu需要手动装）
-      - name: 安装Chrome浏览器
+      - name: 安装Chromium浏览器
         run: |
           sudo apt update
           sudo apt install -y chromium-browser chromium-chromedriver
-          # 建立软链接（适配代码中的路径）
           sudo ln -s /usr/bin/chromedriver /usr/local/bin/chromedriver
-          sudo ln -s /usr/bin/chromium-browser /usr/bin/google-chrome
 
-      # 步骤3：设置Python环境
-      - name: 设置Python环境
+      - name: Python环境
         uses: actions/setup-python@v5
         with:
-          python-version: '3.10'  # 推荐3.10+
+          python-version: "3.10"
 
-      # 步骤4：安装Python依赖
       - name: 安装依赖
-        run: |
-          python -m pip install --upgrade pip
-          pip install selenium
+        run: pip install selenium
 
-      # 步骤5：运行IPTV更新脚本
-      - name: 执行IPTV更新脚本
+      - name: 运行采集脚本
         run: python iptv_bc.py
 
-      # 步骤6：推送更新（脚本内已包含Git推送，此步骤为兜底）
-      - name: 兜底推送代码
-        if: success()
+      # 兜底推送（脚本内已推送，双重保险）
+      - name: 兜底提交推送
         run: |
           git config --global user.name "GitHub Actions Bot"
           git config --global user.email "actions@github.com"
           git add .
-          git commit -m "兜底自动更新 $(date +'%Y-%m-%d %H:%M:%S')" --allow-empty
+          git commit -m "兜底更新 $(date +'%Y-%m-%d %H:%M:%S')" --allow-empty
           git push origin main
