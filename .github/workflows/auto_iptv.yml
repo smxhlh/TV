@@ -1,0 +1,24 @@
+name: IPTV自动更新单源文件
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 3 * * *" # 每日凌晨3点运行
+jobs:
+  update_source:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: 检出仓库代码
+        uses: actions/checkout@v5
+      - name: 配置Python3.11
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+      - name: 安装依赖
+        run: pip install requests
+      - name: 执行抓取分类脚本
+        run: python iptv_sort.py
+      - name: 上传产物文件
+        uses: actions/upload-artifact@v5
+        with:
+          name: IPTV源文件
+          path: IPTV.txt
