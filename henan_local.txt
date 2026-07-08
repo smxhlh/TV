@@ -1,0 +1,15 @@
+# 自动更新时间：2026-07-08 10:23:56
+河南公共,#HENAN#,http://39.150.98.32:37799/tsfile/live/0139_7.m3u8?key=txiptv&playlive=1&authid=0
+河南公共,#HENAN#,http://39.150.98.32:37799/udp://@224.1.1.22:10022
+河南新闻,#HENAN#,http://39.150.98.32:37799/tsfile/live/0139_6.m3u8?key=txiptv&playlive=1&authid=0
+河南新闻,#HENAN#,http://39.150.98.32:37799/udp://@224.1.1.21:10021
+河南梨园,#HENAN#,http://39.150.98.32:37799/tsfile/live/0139_8.m3u8?key=txiptv&playlive=1&authid=0
+河南梨园,#HENAN#,http://39.150.98.32:37799/udp://@224.1.1.23:10023
+河南民生,#HENAN#,http://39.150.98.32:37799/tsfile/live/0139_3.m3u8?key=txiptv&playlive=1&authid=0
+河南民生,#HENAN#,http://39.150.98.32:37799/udp://@224.1.1.18:10018
+河南电视剧,#HENAN#,http://39.150.98.32:37799/tsfile/live/0139_5.m3u8?key=txiptv&playlive=1&authid=0
+河南电视剧,#HENAN#,http://39.150.98.32:37799/udp://@224.1.1.20:10020
+河南都市,#HENAN#,http://39.150.98.32:37799/tsfile/live/0139_2.m3u8?key=txiptv&playlive=1&authid=0
+河南都市,#HENAN#,http://39.150.98.32:37799/udp://@224.1.1.17:10017
+移动戏曲,#HENAN#,http://39.150.98.32:37799/tsfile/live/0017_6.m3u8?key=txiptv&playlive=1&authid=0
+移动戏曲,#HENAN#,http://39.150.98.32:37799/udp://@224.1.1.74:10074
