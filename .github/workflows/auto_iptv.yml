@@ -1,5 +1,4 @@
 name: IPTV Auto Update Live.txt
-# 触发规则：定时每天凌晨2点执行 + 手动点击运行
 on:
   workflow_dispatch:
   schedule:
@@ -10,7 +9,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: 检出当前脚本仓库代码
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: 安装系统依赖 Chrome & Chromedriver
         run: |
@@ -18,7 +17,7 @@ jobs:
           sudo apt install -y chromium-chromedriver chromium-browser git
 
       - name: 配置Python环境
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.11"
 
@@ -28,12 +27,14 @@ jobs:
 
       - name: 执行IPTV采集脚本
         env:
-          # 关键：仓库PAT密钥，用于跨仓库推送smxhlh/TV
           REPO_PAT: ${{ secrets.REPO_PAT }}
+          # 如需代理取消注释并在仓库添加PROXY_URL密钥
+          # HTTP_PROXY: ${{ secrets.PROXY_URL }}
+          # HTTPS_PROXY: ${{ secrets.PROXY_URL }}
         run: python iptv_bc.py
 
       - name: 上传运行日志
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: iptv-run-log
           path: IPTV_Log.txt
