@@ -24,8 +24,8 @@ jobs:
       - name: Install requests
         run: pip install requests
 
-      - name: Run IPTV sort script
-        run: python iptv_sort.py
+      - name: Run IPTV sort script 打印完整报错
+        run: python -u iptv_sort.py
 
       - name: Configure Git identity
         run: |
@@ -35,7 +35,6 @@ jobs:
       - name: Pull latest remote code
         run: git pull --rebase origin $(git rev-parse --abbrev-ref HEAD)
 
-      # 仅添加单一合并文件
       - name: Stage changed file
         run: git add iptv_all.txt
 
