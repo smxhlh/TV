@@ -1,4 +1,6 @@
-name: IPTV M3U 自动分类更新
+name: IPTV M3U 单文件自动更新
+permissions:
+  contents: write
 on:
   workflow_dispatch:
   schedule:
@@ -8,45 +10,37 @@ jobs:
   crawl_and_sort:
     runs-on: ubuntu-24.04
     steps:
-      # 完整克隆仓库，获取全部分支历史
       - name: Checkout repository
         uses: actions/checkout@v5
         with:
           fetch-depth: 0
           persist-credentials: true
 
-      # Python 环境
       - name: Setup Python 3.11
         uses: actions/setup-python@v6
         with:
           python-version: "3.11"
 
-      # 安装依赖
       - name: Install requests
         run: pip install requests
 
-      # 执行抓取分类脚本
       - name: Run IPTV sort script
         run: python iptv_sort.py
 
-      # Git 全局用户配置
       - name: Configure Git identity
         run: |
           git config --global user.name "GitHub Actions Bot"
           git config --global user.email "actions@github.com"
 
-      # 关键：先拉取远端最新代码，解决冲突导致的128
       - name: Pull latest remote code
         run: git pull --rebase origin $(git rev-parse --abbrev-ref HEAD)
 
-      # 添加分类文件
-      - name: Stage changed txt files
-        run: git add cctv.txt weishi.txt henan_local.txt movie.txt
+      # 仅添加单一合并文件
+      - name: Stage changed file
+        run: git add iptv_all.txt
 
-      # 提交更新
       - name: Commit changes
-        run: git commit -m "自动更新分类iptv源 $(date '+%Y-%m-%d %H:%M')" --allow-empty
+        run: git commit -m "自动更新iptv_all.txt $(date '+%Y-%m-%d %H:%M')" --allow-empty
 
-      # 自动推送当前检出分支（兼容main/master）
       - name: Push to remote repo
         run: git push origin $(git rev-parse --abbrev-ref HEAD)
