@@ -21,11 +21,11 @@ HENAN_CHANNELS = {
     "河南都市", "河南民生", "河南法治", "河南电视剧",
     "河南新闻", "河南公共", "河南梨园", "移动戏曲"
 }
-# 新增喜剧影院，保留相声小品
-MOVIE_KEYS = {
+# 影视关键词：喜剧影院、相声小品都在内
+MOVIE_KEYS = [
     "IPTV经典电影", "动作影院", "动作电影", "家庭影院",
     "电影", "相声小品", "经典电影", "喜剧影院"
-}
+]
 
 # 原始存储（未测速）
 raw_cctv = []
@@ -99,34 +99,51 @@ def parse_m3u(raw_text: str):
             classify_channel(current_name, play_url)
 
 def classify_channel(name: str, url: str):
-    # 匹配CCTV5、CCTV5+这类格式
+    print(f"解析频道：{name}")
+    # 1. CCTV优先匹配
     match = CCTV_PATTERN.search(name)
     if match:
         pure_name = match.group()
         raw_cctv.append((pure_name, url))
+        print(f" -> 归入央视：{pure_name}")
         return
-    # 影视匹配
-    for mv_word in MOVIE_KEYS:
-        if mv_word in name:
+    
+    # 2. 影视类匹配（修复点：循环关键词，包含即归类）
+    is_movie = False
+    for keyword in MOVIE_KEYS:
+        if keyword in name:
             raw_movie.append((name, url))
+            print(f" -> 归入影视：{name} 匹配关键词：{keyword}")
+            is_movie = True
             return
-    # 河南台
+    if is_movie:
+        return
+
+    # 3. 河南台
     for hn_name in HENAN_CHANNELS:
         if hn_name in name:
             raw_henan.append((name, url))
+            print(f" -> 归入河南：{name}")
             return
-    # 卫视
+    
+    # 4. 卫视
     if WEISHI_KEY in name:
         raw_weishi.append((name, url))
+        print(f" -> 归入卫视：{name}")
+        return
+    
+    # 无匹配丢弃
+    print(f" -> 无匹配，丢弃：{name}")
 
 # ===================== 测速处理 =====================
 def process_all_data():
-    print(f"开始批量测速，并发数：{TEST_WORKERS}，超时限制：{TEST_TIMEOUT}s")
+    print(f"\n开始批量测速，并发数：{TEST_WORKERS}，超时限制：{TEST_TIMEOUT}s")
     global cctv_speed_map, movie_speed_map, henan_speed_map, weishi_speed_map
     cctv_speed_map = batch_test_speed(raw_cctv)
     movie_speed_map = batch_test_speed(raw_movie)
     henan_speed_map = batch_test_speed(raw_henan)
     weishi_speed_map = batch_test_speed(raw_weishi)
+    print(f"测速完成，影视有效频道数量：{len(movie_speed_map)}")
 
 # ===================== 输出文件 =====================
 def save_merge_file():
@@ -179,7 +196,7 @@ def save_merge_file():
     total_henan_link = sum(len(v) for v in henan_speed_map.values())
     total_weishi_link = sum(len(v) for v in weishi_speed_map.values())
 
-    print(f"文件生成完成：{OUTPUT_ALL}")
+    print(f"\n文件生成完成：{OUTPUT_ALL}")
     print(f"CCTV频道数：{total_cctv_chan} 有效CCTV链接：{total_cctv_link}")
     print(f"影视有效链接：{total_movie_link} 河南有效链接：{total_henan_link} 卫视有效链接：{total_weishi_link}")
 
@@ -191,7 +208,7 @@ def main():
         return
     print("开始解析M3U频道...")
     parse_m3u(m3u_text)
-    print(f"待测速总链接：CCTV:{len(raw_cctv)} 影视:{len(raw_movie)} 河南:{len(raw_henan)} 卫视:{len(raw_weishi)}")
+    print(f"\n待测速总链接：CCTV:{len(raw_cctv)} 影视:{len(raw_movie)} 河南:{len(raw_henan)} 卫视:{len(raw_weishi)}")
     process_all_data()
     save_merge_file()
     print("文件生成完毕，等待Workflow提交推送")
