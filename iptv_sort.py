@@ -12,6 +12,8 @@ HEADERS = {
 }
 
 # 分类匹配规则
+# 匹配CCTV+数字，提取纯CCTV编号
+CCTV_PATTERN = re.compile(r"(CCTV\d+)", re.IGNORECASE)
 CCTV_REG = re.compile(r"CCTV\d+", re.IGNORECASE)
 WEISHI_KEY = "卫视"
 HENAN_CHANNELS = {
