@@ -3,9 +3,9 @@ permissions:
   contents: write
 on:
   workflow_dispatch:
- schedule:
-  - cron: "30 17 * * *"
-    timezone: "Asia/Shanghai"
+  schedule:
+    - cron: "30 17 * * *"
+      timezone: "Asia/Shanghai"
 
 jobs:
   crawl_and_sort:
