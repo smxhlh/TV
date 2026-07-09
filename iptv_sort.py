@@ -14,16 +14,17 @@ HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/150.0.0.0 Safari/537.36"
 }
 
-# 正则规则
-CCTV_PATTERN = re.compile(r"CCTV\d+", re.IGNORECASE)
+# 正则规则：兼容 CCTV5+
+CCTV_PATTERN = re.compile(r"CCTV\d+\+?", re.IGNORECASE)
 WEISHI_KEY = "卫视"
 HENAN_CHANNELS = {
     "河南都市", "河南民生", "河南法治", "河南电视剧",
     "河南新闻", "河南公共", "河南梨园", "移动戏曲"
 }
+# 新增喜剧影院，保留相声小品
 MOVIE_KEYS = {
     "IPTV经典电影", "动作影院", "动作电影", "家庭影院",
-    "电影", "相声小品", "经典电影"
+    "电影", "相声小品", "经典电影", "喜剧影院"
 }
 
 # 原始存储（未测速）
@@ -98,19 +99,23 @@ def parse_m3u(raw_text: str):
             classify_channel(current_name, play_url)
 
 def classify_channel(name: str, url: str):
+    # 匹配CCTV5、CCTV5+这类格式
     match = CCTV_PATTERN.search(name)
     if match:
         pure_name = match.group()
         raw_cctv.append((pure_name, url))
         return
+    # 影视匹配
     for mv_word in MOVIE_KEYS:
         if mv_word in name:
             raw_movie.append((name, url))
             return
+    # 河南台
     for hn_name in HENAN_CHANNELS:
         if hn_name in name:
             raw_henan.append((name, url))
             return
+    # 卫视
     if WEISHI_KEY in name:
         raw_weishi.append((name, url))
 
@@ -128,9 +133,15 @@ def save_merge_file():
     now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     content = f"# IPTV全部分类源 更新时间：{now}\n# 测速超时阈值：{TEST_TIMEOUT}s，同频道内链接按响应速度从快到慢排序\n\n"
 
-    # 央视
+    # 央视：兼容CCTV5+排序
     content += "央视频道,#genre#\n"
-    sorted_cctv_names = sorted(cctv_speed_map.keys(), key=lambda x: int(re.search(r"\d+", x).group()))
+    # 自定义排序规则，先数字，再处理+号
+    def cctv_sort_key(name):
+        num_part = re.search(r"\d+", name).group()
+        has_plus = 1 if "+" in name else 0
+        return int(num_part), has_plus
+
+    sorted_cctv_names = sorted(cctv_speed_map.keys(), key=cctv_sort_key)
     for cctv_name in sorted_cctv_names:
         for cost, url in cctv_speed_map[cctv_name]:
             content += f"{cctv_name},{url}\n"
