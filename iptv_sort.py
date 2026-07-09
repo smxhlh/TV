@@ -19,7 +19,7 @@ CCTV_PATTERN = re.compile(r"CCTV\d+\+?", re.IGNORECASE)
 WEISHI_KEY = "卫视"
 HENAN_CHANNELS = {
     "河南都市", "河南民生", "河南法制", "河南电视剧",
-    "河南新闻", "河南公共", "河南梨园", "移动戏曲"
+    "河南新闻", "河南公共", "河南梨园"
 }
 # 影视关键词：喜剧影院、相声小品都在内
 MOVIE_KEYS = [
