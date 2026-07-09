@@ -7,8 +7,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 M3U_URL = "https://z.szyyds.cn/iptv"
 OUTPUT_ALL = "iptv_all.txt"
 # 测速配置
-TEST_TIMEOUT = 1.2       # 单链接测速超时秒数
-TEST_WORKERS = 15        # 并发测速线程数
+TEST_TIMEOUT = 1.2
+TEST_WORKERS = 15
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/150.0.0.0 Safari/537.36"
@@ -33,18 +33,16 @@ raw_weishi = []
 raw_movie = []
 url_unique = set()
 
-# 测速后存储结构：{频道名: [(耗时, url), ...]}
+# 测速后存储
 cctv_speed_map = {}
 movie_speed_map = {}
 henan_speed_map = {}
 weishi_speed_map = {}
 
 # ===================== 测速工具 =====================
-def test_url_speed(url: str) -> tuple[float | None, str]:
-    """测试链接响应耗时，超时返回None"""
+def test_url_speed(url: str):
     try:
         start = datetime.now()
-        # 仅HEAD请求，不下载流，提速
         resp = requests.head(url, headers=HEADERS, timeout=TEST_TIMEOUT)
         resp.close()
         cost = (datetime.now() - start).total_seconds()
@@ -52,8 +50,7 @@ def test_url_speed(url: str) -> tuple[float | None, str]:
     except Exception:
         return None, url
 
-def batch_test_speed(channel_url_list: list[tuple[str, str]]) -> dict[str, list[tuple[float, str]]]:
-    """批量测速，返回分组测速结果，同频道内按速度从快到慢排序"""
+def batch_test_speed(channel_url_list):
     channel_speed_dict = {}
     task_list = []
     for name, url in channel_url_list:
@@ -68,7 +65,7 @@ def batch_test_speed(channel_url_list: list[tuple[str, str]]) -> dict[str, list[
                 if chan_name not in channel_speed_dict:
                     channel_speed_dict[chan_name] = []
                 channel_speed_dict[chan_name].append((cost, url))
-    # 每组内部按耗时升序（越快越靠前）
+    # 同频道按速度升序
     for k in channel_speed_dict:
         channel_speed_dict[k].sort(key=lambda x: x[0])
     return channel_speed_dict
@@ -101,45 +98,37 @@ def parse_m3u(raw_text: str):
             classify_channel(current_name, play_url)
 
 def classify_channel(name: str, url: str):
-    # CCTV 提取纯名称
     match = CCTV_PATTERN.search(name)
     if match:
         pure_name = match.group()
         raw_cctv.append((pure_name, url))
         return
-    # 影视
     for mv_word in MOVIE_KEYS:
         if mv_word in name:
             raw_movie.append((name, url))
             return
-    # 河南台
     for hn_name in HENAN_CHANNELS:
         if hn_name in name:
             raw_henan.append((name, url))
             return
-    # 卫视
     if WEISHI_KEY in name:
         raw_weishi.append((name, url))
 
-# ===================== 数据测速处理 =====================
+# ===================== 测速处理 =====================
 def process_all_data():
     print(f"开始批量测速，并发数：{TEST_WORKERS}，超时限制：{TEST_TIMEOUT}s")
     global cctv_speed_map, movie_speed_map, henan_speed_map, weishi_speed_map
-    # CCTV测速
     cctv_speed_map = batch_test_speed(raw_cctv)
-    # 影视测速（已加上你要的代码）
     movie_speed_map = batch_test_speed(raw_movie)
-    # 河南测速
     henan_speed_map = batch_test_speed(raw_henan)
-    # 卫视频道测速
     weishi_speed_map = batch_test_speed(raw_weishi)
 
-# ===================== 文件输出 =====================
+# ===================== 输出文件 =====================
 def save_merge_file():
     now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     content = f"# IPTV全部分类源 更新时间：{now}\n# 测速超时阈值：{TEST_TIMEOUT}s，同频道内链接按响应速度从快到慢排序\n\n"
 
-    # 1.央视频道：按CCTV数字升序，同频道速度快→慢
+    # 央视
     content += "央视频道,#genre#\n"
     sorted_cctv_names = sorted(cctv_speed_map.keys(), key=lambda x: int(re.search(r"\d+", x).group()))
     for cctv_name in sorted_cctv_names:
@@ -147,7 +136,7 @@ def save_merge_file():
             content += f"{cctv_name},{url}\n"
     content += "\n"
 
-    # 2.影视频道：名称字典序，同频道速度快→慢
+    # 影视
     content += "影视,#genre#\n"
     sorted_movie_names = sorted(movie_speed_map.keys())
     for name in sorted_movie_names:
@@ -155,7 +144,7 @@ def save_merge_file():
             content += f"{name},{url}\n"
     content += "\n"
 
-    # 3.河南频道：名称字典序，同频道速度快→慢
+    # 河南
     content += "河南频道,#genre#\n"
     sorted_henan_names = sorted(henan_speed_map.keys())
     for name in sorted_henan_names:
@@ -163,7 +152,7 @@ def save_merge_file():
             content += f"{name},{url}\n"
     content += "\n"
 
-    # 4.卫视频道：名称字典序，同频道速度快→慢
+    # 卫视
     content += "卫视频道,#genre#\n"
     sorted_weishi_names = sorted(weishi_speed_map.keys())
     for name in sorted_weishi_names:
@@ -173,7 +162,6 @@ def save_merge_file():
     with open(OUTPUT_ALL, "w", encoding="utf-8") as f:
         f.write(content)
 
-    # 统计信息
     total_cctv_chan = len(cctv_speed_map)
     total_cctv_link = sum(len(v) for v in cctv_speed_map.values())
     total_movie_link = sum(len(v) for v in movie_speed_map.values())
