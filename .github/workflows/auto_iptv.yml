@@ -4,7 +4,8 @@ permissions:
 on:
   workflow_dispatch:
   schedule:
-    - cron: "0 9 * * *"
+    # UTC 19点 = 北京时间次日凌晨3点
+    - cron: "0 19 * * *"
 
 jobs:
   crawl_and_sort:
@@ -12,9 +13,6 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
-        with:
-          fetch-depth: 0
-          persist-credentials: true
 
       - name: Setup Python 3.11
         uses: actions/setup-python@v6
@@ -24,7 +22,7 @@ jobs:
       - name: Install requests
         run: pip install requests
 
-      - name: Run IPTV sort script 打印完整报错
+      - name: Run IPTV sort script
         run: python -u iptv_sort.py
 
       - name: Configure Git identity
@@ -32,14 +30,8 @@ jobs:
           git config --global user.name "GitHub Actions Bot"
           git config --global user.email "actions@github.com"
 
-      - name: Pull latest remote code
-        run: git pull --rebase origin $(git rev-parse --abbrev-ref HEAD)
-
-      - name: Stage changed file
-        run: git add iptv_all.txt
-
-      - name: Commit changes
-        run: git commit -m "自动更新iptv_all.txt $(date '+%Y-%m-%d %H:%M')" --allow-empty
-
-      - name: Push to remote repo
-        run: git push origin $(git rev-parse --abbrev-ref HEAD)
+      - name: Commit & Push changes
+        run: |
+          git add iptv_all.txt
+          git commit -m "自动更新iptv_all.txt $(date '+%Y-%m-%d %H:%M')" --allow-empty
+          git push
