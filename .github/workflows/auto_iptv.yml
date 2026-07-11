@@ -4,7 +4,9 @@ permissions:
 on:
   workflow_dispatch:
   schedule:
-    - cron: "30 17 * * *"
+    # cron 格式：分 时 日 月 星期
+    # 每8小时执行一次：0 0,8,16 * * * 上海时区0点、8点、16点运行
+    - cron: "0 0,8,16 * * *"
       timezone: "Asia/Shanghai"
 
 jobs:
