@@ -9,7 +9,7 @@ M3U_URL = "https://z.szyyds.cn/iptv"
 OUTPUT_ALL = "iptv_all.txt"
 # 测速配置
 TEST_TIMEOUT = 1.2
-OLD_TEST_TIMEOUT = 1.5  # 旧链接测速放宽一点超时
+OLD_TEST_TIMEOUT = 1.2  # 旧链接测速超时一致
 TEST_WORKERS = 15
 REUSE_OLD_SOURCE = True  # 开启复用旧文件有效链接
 
