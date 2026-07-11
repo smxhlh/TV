@@ -6,7 +6,7 @@ on:
   schedule:
     # cron 格式：分 时 日 月 星期
     # 每8小时执行一次：0 0,8,16 * * * 上海时区0点、8点、16点运行
-    - cron: "0 0,8,16 * * *"
+    - cron: "0 6,18 * * *"
       timezone: "Asia/Shanghai"
 
 jobs:
