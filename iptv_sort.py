@@ -12,7 +12,7 @@ TEST_TIMEOUT = 1.2
 OLD_TEST_TIMEOUT = 1.2  # 旧链接测速超时一致
 TEST_WORKERS = 15
 REUSE_OLD_SOURCE = True  # 开启复用旧文件有效链接
-MIN_SPEED_KB = 950  # 最低保留速度 950KB/s，低于直接丢弃
+MIN_SPEED_KB = 800  # 最低保留速度 950KB/s，低于直接丢弃
 TEST_DURATION = 1  # 测速拉流时长1秒，平衡速度与耗时
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/150.0.0.0 Safari/537.36"
