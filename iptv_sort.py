@@ -59,7 +59,6 @@ def test_url_speed(url: str, timeout: float):
     try:
         total_bytes = 0
         start_time = time.time()
-        # 流式拉取数据，不完整下载
         resp = requests.get(url, headers=HEADERS, stream=True, timeout=timeout)
         resp.raise_for_status()
         for chunk in resp.iter_content(chunk_size=1024):
@@ -67,14 +66,13 @@ def test_url_speed(url: str, timeout: float):
                 break
             total_bytes += len(chunk)
             now = time.time()
-            # 测速时长到点停止
-            if now - start_time >= TEST_DURATION:
+            # 满足两个条件之一停止：到测速时长 或 至少拉到2000KB数据
+            if now - start_time >= TEST_DURATION or total_bytes >= 2048*1024:
                 break
         resp.close()
         cost = now - start_time
         if cost <= 0:
             return 0.0, url
-        # 计算KB/s
         speed_kb = total_bytes / cost / 1024
         return round(speed_kb, 2), url
     except Exception:
