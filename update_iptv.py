@@ -1,10 +1,14 @@
 import requests
 import re
-import time
 
 # 配置参数
 M3U_URL = "https://iptv-org.github.io/iptv/index.m3u"
 OUTPUT_FILE = "每日更新.txt"
+# 固定稳定CCTV5、CCTV5+国内公益源（OK影视可直接播放）
+FIX_CCTV_SOURCE = {
+    "CCTV5": "http://ivi.bupt.edu.cn/hls/cctv5hd.m3u8",
+    "CCTV5+": "http://ivi.bupt.edu.cn/hls/cctv5phd.m3u8"
+}
 
 def download_m3u(url):
     """下载远程M3U源文件"""
@@ -19,27 +23,14 @@ def download_m3u(url):
         print(f"下载源文件失败：{e}")
         return ""
 
-def check_url_valid(url):
-    """快速检测链接是否有效，过滤失效/不支持的链接"""
-    invalid_keyword = ["404", "not found", "area", "境外", "不支持", "无法访问"]
-    # 过滤特殊后缀无效链接
-    if url.endswith((".ts", ".html")) or "go.bkpcp.top" in url:
-        return False
-    try:
-        # 超时快速探测，不完整下载
-        res = requests.head(url, timeout=3, allow_redirects=True)
-        return res.status_code < 400
-    except:
-        return False
-
 def parse_iptv(m3u_text):
-    """解析M3U、过滤失效链接、补全缺失CCTV5/5+、精准分类"""
+    """解析M3U、补全CCTV5/5+、精准分类、保留全部原生链接"""
     cctv_list = []
     movie_list = []
     hongkong_list = []
     satellite_list = []
 
-    # 兼容 CCTV-1/CCTV1 格式
+    # 兼容 CCTV-1 / CCTV1 两种格式，匹配1-17、5+
     cctv_pattern = re.compile(r"CCTV-?(5\+|[1-9]|1[0-7])", re.IGNORECASE)
     cctv_exist = dict()
 
@@ -56,40 +47,37 @@ def parse_iptv(m3u_text):
         elif line and not line.startswith("#") and channel_name:
             channel_url = line.strip()
 
-            # CCTV频道匹配 + 有效性过滤
+            # 匹配央视频道，标准化命名 + 去重
             cctv_res = cctv_pattern.search(channel_name)
             if cctv_res:
                 cctv_code = cctv_res.group(1).upper()
                 standard_name = f"CCTV{cctv_code}"
-                # 只保存有效链接，剔除系统报错的失效源
-                if standard_name not in cctv_exist and check_url_valid(channel_url):
+                if standard_name not in cctv_exist:
                     cctv_exist[standard_name] = channel_url
                     cctv_list.append(f"{standard_name},{channel_url}")
             
-            # 电影频道
+            # 电影频道分类
             if "电影" in channel_name or "影院" in channel_name:
-                if check_url_valid(channel_url):
-                    movie_list.append(f"{channel_name},{channel_url}")
+                movie_list.append(f"{channel_name},{channel_url}")
             
-            # 香港凤凰频道
+            # 香港凤凰频道分类
             if "凤凰" in channel_name:
-                if check_url_valid(channel_url):
-                    hongkong_list.append(f"{channel_name},{channel_url}")
+                hongkong_list.append(f"{channel_name},{channel_url}")
             
-            # 卫视频道
+            # 卫视频道分类
             if "卫视" in channel_name:
-                if check_url_valid(channel_url):
-                    satellite_list.append(f"{channel_name},{channel_url}")
+                satellite_list.append(f"{channel_name},{channel_url}")
             
+            # 重置临时变量
             channel_name = ""
             channel_url = ""
     
-    # ========== 核心修复：强制补全缺失的 CCTV5、CCTV5+ ==========
+    # 强制补全缺失的 CCTV5 CCTV5+
     for name, url in FIX_CCTV_SOURCE.items():
         if name not in cctv_exist:
             cctv_list.append(f"{name},{url}")
 
-    # CCTV固定排序
+    # 官方固定排序 CCTV1~17 + CCTV5+
     cctv_sort_map = {
         "CCTV1":1, "CCTV2":2, "CCTV3":3, "CCTV4":4, "CCTV5":5,
         "CCTV5+":6, "CCTV6":7, "CCTV7":8, "CCTV8":9, "CCTV9":10,
@@ -101,7 +89,7 @@ def parse_iptv(m3u_text):
     return cctv_list, movie_list, hongkong_list, satellite_list
 
 def generate_txt(cctv, movie, hk, satellite):
-    """生成标准OK影视TXT格式"""
+    """生成OK影视标准TXT格式"""
     content = []
     content.append("央视频道,#genre#")
     content.extend(cctv)
@@ -120,7 +108,7 @@ def generate_txt(cctv, movie, hk, satellite):
 
     with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
         f.write("\n".join(content))
-    print(f"✅ 更新完成：已补全CCTV5/CCTV5+、过滤所有失效链接！")
+    print("✅ IPTV源更新完成，无报错！")
 
 if __name__ == "__main__":
     m3u_content = download_m3u(M3U_URL)
