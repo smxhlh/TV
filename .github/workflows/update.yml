@@ -15,15 +15,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: 拉取仓库代码
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: 配置Python环境
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.11"
 
       - name: 安装依赖
-        run: pip install requests
+        run: pip install requests --upgrade
 
       - name: 执行源更新脚本
         run: python auto_update.py
@@ -33,5 +33,5 @@ jobs:
           git config --global user.name "actions-user"
           git config --global user.email "actions@github.com"
           git add 每日更新.txt
-          git commit -m "自动更新IPTV源 $(date +'%Y-%m-%d %H:%M:%S')"
-          git push origin master
+          git commit -m "自动更新IPTV源 $(date +'%Y-%m-%d %H:%M:%S')" || echo "无文件更新，跳过提交"
+          git push origin master || echo "推送无需执行"
