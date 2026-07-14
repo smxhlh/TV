@@ -1,65 +1,73 @@
 央视频道,#genre#
+CCTV1,http://69.30.245.50/live/cctv1.m3u8
+CCTV2,http://74.91.26.218:82/live/cctv2hd.m3u8
+CCTV3,http://74.91.26.218:82/live/cctv3hd.m3u8
+CCTV4,https://global.cgtn.cicc.media.caton.cloud/master/cgtn-america.m3u8
+CCTV6,http://69.30.245.50/live/cctv6.m3u8
+CCTV7,http://74.91.26.218:82/live/cctv7hd.m3u8
+CCTV8,http://74.91.26.218:82/live/cctv8hd.m3u8
+CCTV9,https://xykt-fix.github.io/Y77.m3u8
 
 电影频道,#genre#
-动作电影 (1080p),
-宇哥电影,
-家庭影院 (1080p),
-精品电影 (1080p),
-高清电影 (1080p),
+动作电影 (1080p),http://39.134.19.68/dbiptv.sn.chinamobile.com/PLTV/88888888/224/3221226465/index.m3u8
+宇哥电影,http://epg.112114.xyz/douyu/413573
+家庭影院 (1080p),http://39.134.19.153/dbiptv.sn.chinamobile.com/PLTV/88888888/224/3221226462/index.m3u8
+精品电影 (1080p),http://183.207.248.71/cntv/live1/jdianying/jdianying
+高清电影 (1080p),http://39.134.19.76/dbiptv.sn.chinamobile.com/PLTV/88888888/224/3221226463/index.m3u8
 
 香港频道,#genre#
-凤凰中文 (720p),
-凤凰资讯 (720p),
-凤凰香港 (720p),
+凤凰中文 (720p),http://223.110.245.139/ott.js.chinamobile.com/PLTV/3/224/3221226922/index.m3u8
+凤凰资讯 (720p),http://223.110.245.167/ott.js.chinamobile.com/PLTV/3/224/3221226923/index.m3u8
+凤凰香港 (720p),http://223.110.245.136/PLTV/3/224/3221226975/index.m3u8
 
 卫视频道,#genre#
-BRTV 北京卫视 (1080p),
-东南卫视 (Southeast Television fka Fujian Television) (2160p),
-东方卫视 (2160p),
-云南卫视 (1080p),
-兵团卫视 (540p) [Not 24/7],
-内蒙古卫视 (576p),
-内蒙古卫视 (576p),
-内蒙古卫视 (576p),
-内蒙古卫视 (576p),
-厦门卫视 (576p),
-厦门卫视 (540p) [Not 24/7],
-吉林卫视 (2160p),
-四川卫视 (576p),
-天津卫视 (1080p),
-宁夏卫视 (576p),
-山东卫视 (720p),
-山东卫视 (1080p),
-山西卫视 (2160p),
-广东卫视 (2160p),
-广西卫视 (576p),
-康巴卫视 (720p) [Not 24/7],
-新疆卫视 (576p),
-新疆卫视 (576p),
-新疆卫视 (576p),
-新疆卫视 (576p),
-新疆卫视 (576p),
-新疆卫视 (540p),
-江苏卫视 (1080p),
-江西卫视 (1080p),
-河南卫视 (2160p),
-浙江卫视 (1080p),
-海南卫视 (576p),
-湖北卫视 (1080p),
-甘肃卫视 (576p),
-西藏卫视 (576p),
-西藏卫视 (576p),
-西藏卫视 (576p),
-贵州卫视 (576p),
-贵州卫视 (576p),
-辽宁卫视 (1080p),
-重庆卫视 (1080p),
-陕西卫视 (576p),
-陕西卫视 (576p),
-陕西卫视 (540p),
-青海卫视 (1080p),
-黑龙卫视 (1080p),
-黑龙卫视 (1080p),
-黑龙卫视 (1080p),
-黑龙卫视 (720p),
-黑龙江卫视 (2160p),
+BRTV 北京卫视 (1080p),http://go.bkpcp.top/mg/bjws
+东南卫视 (Southeast Television fka Fujian Television) (2160p),http://118.81.195.79:9003/hls/24/index.m3u8
+东方卫视 (2160p),http://118.81.195.79:9003/hls/23/index.m3u8
+云南卫视 (1080p),https://hwapi.yunshicloud.com/8xughf/e0bx15.m3u8
+兵团卫视 (540p) [Not 24/7],http://112.25.48.68/live/program/live/btws/1300000/mnf.m3u8
+内蒙古卫视 (576p),http://39.134.115.163:8080/PLTV/88888910/224/3221225667/index.m3u8
+内蒙古卫视 (576p),http://117.169.120.140:8080/live/neimenggustv/.m3u8
+内蒙古卫视 (576p),http://183.207.248.71/gitv/live1/G_NEIMENGGU/G_NEIMENGGU
+内蒙古卫视 (576p),http://223.110.245.173/PLTV/4/224/3221225836/index.m3u8
+厦门卫视 (576p),http://223.110.245.159/ott.js.chinamobile.com/PLTV/3/224/3221226996/index.m3u8
+厦门卫视 (540p) [Not 24/7],http://112.25.48.68/live/program/live/xmws/1300000/mnf.m3u8
+吉林卫视 (2160p),http://118.81.195.79:9003/hls/34/index.m3u8
+四川卫视 (576p),http://39.134.115.163:8080/PLTV/88888910/224/3221225733/index.m3u8
+天津卫视 (1080p),http://39.134.115.163:8080/PLTV/88888910/224/3221225698/index.m3u8
+宁夏卫视 (576p),http://39.134.115.163:8080/PLTV/88888910/224/3221225726/index.m3u8
+山东卫视 (720p),http://125.210.152.18:9090/live/SDWSHD_H265.m3u8
+山东卫视 (1080p),http://39.134.115.163:8080/PLTV/88888910/224/3221225697/index.m3u8
+山西卫视 (2160p),http://118.81.195.79:9003/hls/19/index.m3u8
+广东卫视 (2160p),http://118.81.195.79:9003/hls/26/index.m3u8
+广西卫视 (576p),http://118.81.195.79:9003/hls/27/index.m3u8
+康巴卫视 (720p) [Not 24/7],http://scgctvshow.sctv.com/hdlive/kangba/1.m3u8
+新疆卫视 (576p),http://39.134.115.163:8080/PLTV/88888910/224/3221225725/index.m3u8
+新疆卫视 (576p),http://183.207.248.71/cntv/live1/xinjiangstv/xinjiangstv
+新疆卫视 (576p),http://183.207.248.71/gitv/live1/G_XINJIANG/G_XINJIANG
+新疆卫视 (576p),http://183.207.249.15/PLTV/3/224/3221225523/index.m3u8
+新疆卫视 (576p),http://223.110.243.136/PLTV/3/224/3221225523/index.m3u8
+新疆卫视 (540p),http://112.25.48.68/live/program/live/xjws/1300000/mnf.m3u8
+江苏卫视 (1080p),http://39.134.24.166/dbiptv.sn.chinamobile.com/PLTV/88888890/224/3221226200/index.m3u8
+江西卫视 (1080p),http://39.134.115.163:8080/PLTV/88888910/224/3221225705/index.m3u8
+河南卫视 (2160p),http://118.81.195.79:9003/hls/30/index.m3u8
+浙江卫视 (1080p),http://39.134.115.163:8080/PLTV/88888910/224/3221225703/index.m3u8
+海南卫视 (576p),http://118.81.195.79:9003/hls/28/index.m3u8
+湖北卫视 (1080p),http://118.81.195.79:9003/hls/32/index.m3u8
+甘肃卫视 (576p),http://118.81.195.79:9003/hls/25/index.m3u8
+西藏卫视 (576p),http://39.134.115.163:8080/PLTV/88888910/224/3221225723/index.m3u8
+西藏卫视 (576p),http://117.169.120.140:8080/live/xizangstv/.m3u8
+西藏卫视 (576p),http://183.207.249.16/PLTV/3/224/3221225523/index.m3u8
+贵州卫视 (576p),http://39.134.115.163:8080/PLTV/88888910/224/3221225728/index.m3u8
+贵州卫视 (576p),http://183.207.248.71/gitv/live1/G_GUIZHOU/G_GUIZHOU
+辽宁卫视 (1080p),http://39.134.39.37/PLTV/88888888/224/3221226209/index.m3u8
+重庆卫视 (1080p),http://118.81.195.79:9003/hls/22/index.m3u8
+陕西卫视 (576p),http://39.134.115.163:8080/PLTV/88888910/224/3221225729/index.m3u8
+陕西卫视 (576p),http://223.110.245.139/PLTV/4/224/3221227022/index.m3u8
+陕西卫视 (540p),http://112.25.48.68/live/program/live/sxws/1300000/mnf.m3u8
+青海卫视 (1080p),http://live.geermurmt.com/qhws/sd/live.m3u8
+黑龙卫视 (1080p),http://223.110.243.169/PLTV/3/224/3221227252/index.m3u8
+黑龙卫视 (1080p),http://223.110.245.139/PLTV/4/224/3221227492/index.m3u8
+黑龙卫视 (1080p),http://223.110.245.170/PLTV/3/224/3221227252/index.m3u8
+黑龙卫视 (720p),http://125.210.152.18:9090/live/HLJWSHD_H265.m3u8
+黑龙江卫视 (2160p),http://118.81.195.79:9003/hls/31/index.m3u8
