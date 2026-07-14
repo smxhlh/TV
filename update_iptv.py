@@ -5,11 +5,6 @@ import time
 # 配置参数
 M3U_URL = "https://iptv-org.github.io/iptv/index.m3u"
 OUTPUT_FILE = "每日更新.txt"
-# 补充缺失的CCTV5、CCTV5+ 可用稳定源（国内可播放、无地区限制）
-FIX_CCTV_SOURCE = {
-    "CCTV5": "http://ivi.bupt.edu.cn/hls/cctv5hd.m3u8",
-    "CCTV5+": "http://ivi.bupt.edu.cn/hls/cctv5phd.m3u8"
-}
 
 def download_m3u(url):
     """下载远程M3U源文件"""
