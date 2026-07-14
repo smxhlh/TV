@@ -1,38 +1,36 @@
 name: IPTV每日自动更新
 
-# 定时每日更新 + 手动触发
+# 触发规则：每日凌晨2点自动执行 + 支持手动点击触发
 on:
   schedule:
     - cron: '0 2 * * *'
   workflow_dispatch:
 
-# 解决多工作流并发冲突
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-
+# 运行环境
 jobs:
   update-iptv:
     runs-on: ubuntu-latest
     steps:
       - name: 检出仓库代码
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
+        with:
+          ref: master
 
       - name: 配置Python环境
-        uses: actions/setup-python@v7
+        uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.11"
 
-      - name: 安装Python依赖
-        run: pip install requests -i https://pypi.tuna.tsinghua.edu.cn/simple -q
+      - name: 安装依赖
+        run: pip install requests
 
-      - name: 执行IPTV解析更新脚本
+      - name: 执行IPTV解析生成脚本
         run: python update_iptv.py
 
-      - name: 提交&推送更新
+      - name: 提交更新文件
         run: |
           git config --global user.name "actions-user"
           git config --global user.email "actions@github.com"
           git add 每日更新.txt
-          git commit -m "自动更新IPTV源 $(date +'%Y-%m-%d %H:%M:%S')" --allow-empty
+          git commit -m "自动更新IPTV源 $(date +'%Y-%m-%d %H:%M:%S')"
           git push origin master
