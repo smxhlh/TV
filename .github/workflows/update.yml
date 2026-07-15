@@ -25,7 +25,7 @@ jobs:
           pip install requests
 
       - name: 执行采集测速脚本
-        run: python auto_collect.py
+        run: python auto_update.py
 
       - name: 提交更新文件
         run: |
