@@ -1,4 +1,4 @@
-name: IPTV自动更新爬虫
+name: IPTV咪咕源
 on:
   schedule:
     - cron: '0 8 * * *'
