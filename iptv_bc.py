@@ -105,6 +105,10 @@ def init_browser():
     chrome_options.add_experimental_option("prefs", prefs)
 
     # CI环境自动匹配系统chromedriver，无需手动指定exe路径
+    driver_path = os.getenv("CHROME_DRIVER_PATH")
+    if driver_path and os.path.exists(driver_path):
+        service = Service(executable_path=driver_path)
+    else:
     service = Service()
     driver = webdriver.Chrome(service=service, options=chrome_options)
     driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {
