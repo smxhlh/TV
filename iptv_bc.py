@@ -3,13 +3,12 @@ import os
 import time
 import json
 from datetime import datetime
-import subprocess
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
 from selenium.common.exceptions import TimeoutException, WebDriverException
 
-# ===================== 全局配置（适配CI环境） =====================
+# ===================== 全局配置（CI云端适配） =====================
 PROXY_URL = "http://tonkiang.us/iptvproxy.php"
 CHANNEL_BASE = "http://tonkiang.us/channellist.html"
 MAX_SAVE_GROUP = 3
@@ -20,7 +19,7 @@ RETRY_TIMES = 2
 LOOP_WAIT_INTERVAL = 3
 MAX_LOOP_WAIT = 10
 
-# CI环境：统一输出到仓库根目录 live.txt，不再读取桌面
+# CI环境：仓库根目录live.txt
 LIVE_FILE_LOCAL = "live.txt"
 
 # 失效关键字规则
@@ -84,7 +83,7 @@ def save_live_json(data):
         print(f" 保存文件失败：{e}")
         return False
 
-# ===================== 浏览器初始化（Linux CI无头Chrome，移除360Windows路径） =====================
+# ===================== 浏览器初始化（修复缩进+读取CI驱动环境变量） =====================
 def init_browser():
     chrome_options = Options()
     # CI标准无头模式
@@ -104,12 +103,13 @@ def init_browser():
     }
     chrome_options.add_experimental_option("prefs", prefs)
 
-    # CI环境自动匹配系统chromedriver，无需手动指定exe路径
+    # 读取CI传入的chromedriver路径，修复else缩进问题
     driver_path = os.getenv("CHROME_DRIVER_PATH")
     if driver_path and os.path.exists(driver_path):
         service = Service(executable_path=driver_path)
     else:
-    service = Service()
+        service = Service()
+
     driver = webdriver.Chrome(service=service, options=chrome_options)
     driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {
         "source": "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
@@ -178,7 +178,7 @@ def wait_for_token(driver):
         time.sleep(LOOP_WAIT_INTERVAL)
     return None
 
-# ===================== 主程序（移除本地Git推送逻辑，仅输出文件） =====================
+# ===================== 主程序 =====================
 def main():
     driver = None
     new_token_list = []
@@ -253,7 +253,6 @@ def main():
         print(f"\n 采集完成！共替换 {need_replace_count} 条失效链接，等待工作流提交推送")
     except Exception as e:
         print(f"\n 运行异常：{str(e)}")
-        raise  # 抛出异常让Action标记失败
     finally:
         if driver:
             try:
