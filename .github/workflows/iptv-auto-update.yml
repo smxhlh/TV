@@ -8,7 +8,6 @@ jobs:
   crawl_and_push:
     runs-on: ubuntu-latest
     steps:
-      # 拉取main分支代码
       - name: Checkout repository
         uses: actions/checkout@v5
         with:
@@ -20,7 +19,6 @@ jobs:
         with:
           python-version: "3.11"
 
-      # 安装Chrome与驱动并授权
       - name: Install Chrome & Chromedriver
         run: |
           sudo apt-get update
@@ -29,26 +27,27 @@ jobs:
           echo "CHROME_DRIVER_PATH=/usr/lib/chromium-browser/chromedriver" >> $GITHUB_ENV
           echo "/usr/lib/chromium-browser/" >> $GITHUB_PATH
 
-      # 安装依赖
       - name: Install Python dependencies
         run: pip install selenium requests
 
-      # 运行爬虫脚本
       - name: Run IPTV Crawler
         run: python iptv_bc.py
 
-      # 判断live.txt是否发生修改（稳定写法，不会误报退出码）
+      # 关键修复：shell 关闭 -e，diff 非0不会中断流程
       - name: Check file changes
         id: diff_check
+        shell: bash
         run: |
+          set +e
           git diff --quiet live.txt
-          if [ $? -eq 0 ]; then
+          ret=$?
+          set -e
+          if [ $ret -eq 0 ]; then
             echo "UPDATE_NEEDED=false" >> "$GITHUB_ENV"
           else
             echo "UPDATE_NEEDED=true" >> "$GITHUB_ENV"
           fi
 
-      # 有改动才提交推送main分支
       - name: Commit & Push update
         if: env.UPDATE_NEEDED == 'true'
         run: |
