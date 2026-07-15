@@ -1,57 +1,50 @@
-name: IPTV测速更新
+name: IPTV源自动更新测速
+run-name: ${{ github.actor }} 触发IPTV测速更新
+
+# 触发规则：每日北京时间6点、18点定时 + 手动触发 + push代码触发
 on:
-  # 每日凌晨2点定时执行
+  workflow_dispatch: # 页面手动运行按钮
+  push:
+    branches: [ main, master ]
+    paths:
+      - 'iptv_sort.py'
+      - '.github/workflows/iptv-update.yml'
   schedule:
-    - cron: '0 2 * * *'
-  # 支持仓库页面手动触发运行
-  workflow_dispatch
+    # GitHub cron使用UTC时区，北京时间=UTC+8，需减8小时换算
+    # 北京时间 06:00 → UTC前一日 22:00
+    - cron: '0 22 * * *'
+    # 北京时间 18:00 → UTC 10:00
+    - cron: '0 10 * * *'
 
 jobs:
-  crawl_test_push:
+  iptv-build:
     runs-on: ubuntu-latest
     steps:
-      # 拉取main分支完整仓库代码
-      - name: Checkout repository
+      - name: 检出仓库代码
         uses: actions/checkout@v5
         with:
-          ref: main
-          fetch-depth: 0
+          fetch-depth: 0 # 完整git历史，支持提交推送
 
-      # 配置Python 3.11环境
-      - name: Setup Python
+      - name: 配置Python环境
         uses: actions/setup-python@v6
         with:
-          python-version: "3.11"
+          python-version: '3.11'
+          cache: 'pip' # 缓存依赖包加速构建
 
-      # 安装脚本依赖requests
-      - name: Install dependencies
-        run: pip install requests
+      - name: 安装Python依赖
+        run: |
+          pip install requests
 
-      # 运行排序测速脚本（文件名iptv_sort.py）
-      - name: Run IPTV sort & test script
+      - name: 执行IPTV测速脚本
         run: python iptv_sort.py
 
-      # 检测iptv_all.txt是否发生修改，处理diff非0退出码报错
-      - name: Check file changed
-        id: diff_check
-        shell: bash
-        run: |
-          set +e
-          git diff --quiet iptv_all.txt
-          ret=$?
-          set -e
-          if [ $ret -eq 0 ]; then
-            echo "NEED_COMMIT=false" >> "$GITHUB_ENV"
-          else
-            echo "NEED_COMMIT=true" >> "$GITHUB_ENV"
-          fi
-
-      # 文件有改动则提交推送至main分支
-      - name: Commit and push update
-        if: env.NEED_COMMIT == 'true'
+      - name: 配置Git提交机器人信息
         run: |
           git config --global user.name "IPTV-AutoBot"
           git config --global user.email "bot@github.com"
+
+      - name: 自动提交并推送更新后的iptv_all.txt
+        run: |
           git add iptv_all.txt
-          git commit -m "Auto update IPTV $(date '+%Y-%m-%d %H:%M:%S')"
-          git push origin main
+          # 无变更则跳过提交，有变更自动推送
+          git diff --quiet && echo "频道列表无更新，无需提交" || (git commit -m "自动测速更新IPTV源 $(date '+%Y-%m-%d %H:%M')" && git push)
