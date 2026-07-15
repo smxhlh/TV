@@ -1,15 +1,14 @@
 name: IPTV每日自动更新
 
-# 定时任务：每日8点自动执行（北京时间）
 on:
   schedule:
     - cron: '0 0 * * *'
-  # 支持手动触发更新
   workflow_dispatch:
 
 jobs:
   update-iptv:
     runs-on: ubuntu-latest
+    timeout-minutes: 45   # 设置最大运行45分钟，超时自动终止，避免无限转圈
     steps:
       - name: 检出仓库代码
         uses: actions/checkout@v4
@@ -31,6 +30,7 @@ jobs:
         run: |
           git config --global user.name "actions-user"
           git config --global user.email "actions@github.com"
-          git add 每日更新.txt
-          git commit -m "自动更新IPTV源 $(date +'%Y-%m-%d %H:%M:%S')"
+          git add "每日更新.txt"
+          # 没有变更时不报错退出
+          git commit -m "自动更新IPTV源 $(date +'%Y-%m-%d %H:%M:%S')" || echo "文件无改动，跳过提交"
           git push origin master
