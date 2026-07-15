@@ -1,118 +1,170 @@
 import requests
 import re
-import os
+import time
+from typing import List, Tuple
 
 # 配置常量
 M3U_URL = "https://iptv-org.github.io/iptv/index.m3u"
 SAVE_FILE = "每日更新.txt"
+# 测速超时时间（秒）
+TIMEOUT = 3
+# 请求请求头模拟浏览器
+HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+}
 
-def fetch_m3u_source():
-    """拉取远程M3U播放源文件，增加容错处理"""
+# 分类规则定义
+class IPTVSort:
+    # 央视频道：匹配CCTV1-CCTV17、CCTV5+，忽略后缀文字
+    CCTV_PATTERN = re.compile(r"CCTV(?:-|\+)?(\d{1,2})", re.IGNORECASE)
+    # 电影频道：含电影、影院关键字
+    MOVIE_KEYWORDS = {"电影", "影院"}
+    # 香港频道：含凤凰关键字
+    HK_KEYWORDS = {"凤凰"}
+    # 卫视频道：含卫视关键字
+    TV_KEYWORDS = {"卫视"}
+
+def get_m3u_source() -> List[Tuple[str, str]]:
+    """
+    下载并解析M3U文件，返回(频道名称,播放链接)列表
+    """
     try:
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-        }
-        response = requests.get(M3U_URL, timeout=15, headers=headers)
-        response.encoding = "utf-8"
-        response.raise_for_status()
-        return response.text
+        resp = requests.get(M3U_URL, headers=HEADERS, timeout=10)
+        resp.encoding = "utf-8"
+        content = resp.text
     except Exception as e:
-        print(f"源文件拉取失败：{str(e)}")
-        return ""
+        print(f"下载M3U源失败：{str(e)}")
+        return []
 
-def parse_channel_data(m3u_text):
+    # 解析m3u格式 #EXTINF:-1 ,频道名 \n 链接
+    source_list = []
+    name = ""
+    for line in content.splitlines():
+        line = line.strip()
+        if line.startswith("#EXTINF"):
+            # 提取频道名称
+            if "," in line:
+                name = line.split(",")[-1].strip()
+        elif line and not line.startswith("#"):
+            # 有效播放链接
+            url = line
+            if name and url:
+                source_list.append((name, url))
+                name = ""
+    print(f"解析完成，共获取原始源：{len(source_list)} 个")
+    return source_list
+
+def test_url(url: str) -> bool:
     """
-    解析M3U文本，分类筛选频道
-    返回分类字典：{分类名: [(频道名, 链接), ...]}
+    测速：检测链接是否可播放
     """
-    # 初始化分类容器
-    classify_data = {
-        "央视频道": [],
-        "电影频道": [],
-        "香港频道": [],
-        "卫视频道": []
-    }
+    try:
+        res = requests.head(url, timeout=TIMEOUT, headers=HEADERS, allow_redirects=True)
+        if 200 <= res.status_code < 300:
+            return True
+        # HEAD请求失败则尝试GET
+        res_get = requests.get(url, timeout=TIMEOUT, headers=HEADERS, stream=True)
+        return 200 <= res_get.status_code < 300
+    except:
+        return False
 
-    # 兼容换行格式，优化正则匹配精度
-    channel_pattern = re.compile(r'#EXTINF:-1,(.*?)\r?\n(https?://.*?)\r?\n')
-    channel_list = channel_pattern.findall(m3u_text)
+def filter_valid_source(source_list: List[Tuple[str, str]]) -> List[Tuple[str, str]]:
+    """过滤无效链接，仅保留可播放源"""
+    valid_list = []
+    for name, url in source_list:
+        if test_url(url):
+            valid_list.append((name, url))
+    print(f"测速完成，有效播放源：{len(valid_list)} 个")
+    return valid_list
 
-    # CCTV1-CCTV17 正则匹配（包含CCTV5+，兼容所有中文后缀）
-    cctv_pattern = re.compile(r'CCTV\s*(\d+\+?)', re.IGNORECASE)
-    valid_cctv_num = {"1","2","3","4","5","5+","6","7","8","9","10","11","12","13","14","15","16","17"}
+def classify_source(valid_list: List[Tuple[str, str]]):
+    """
+    按规则分类频道
+    返回：央视、电影、香港、卫视 四类列表
+    """
+    cctv_list = []
+    movie_list = []
+    hk_list = []
+    tv_list = []
 
-    for name, url in channel_list:
-        name_strip = name.strip()
-        # 1. 筛选央视频道
-        cctv_res = cctv_pattern.search(name_strip)
-        if cctv_res:
-            cctv_code = cctv_res.group(1)
-            if cctv_code in valid_cctv_num:
-                standard_name = f"CCTV{cctv_code}"
-                # 去重处理
-                if not any(item[0] == standard_name for item in classify_data["央视频道"]):
-                    classify_data["央视频道"].append((standard_name, url))
-                continue
-
-        # 2. 筛选电影频道
-        if "电影" in name_strip or "影院" in name_strip:
-            classify_data["电影频道"].append((name_strip, url))
+    for name, url in valid_list:
+        # 1. 匹配央视频道 CCTV1-17、CCTV5+
+        cctv_match = IPTVSort.CCTV_PATTERN.search(name)
+        if cctv_match:
+            num = cctv_match.group(1)
+            # 限定1-17频道
+            if num.isdigit() and 1 <= int(num) <= 17:
+                # 统一规范命名，忽略后缀多余文字
+                if "+" in name or num == "5":
+                    std_name = f"CCTV{num}+" if num == "5" else f"CCTV{num}"
+                else:
+                    std_name = f"CCTV{num}"
+                # 去重添加
+                if not any(x[0] == std_name for x in cctv_list):
+                    cctv_list.append((std_name, url))
             continue
 
-        # 3. 筛选香港凤凰频道
-        if "凤凰" in name_strip:
-            classify_data["香港频道"].append((name_strip, url))
+        # 2. 电影频道
+        if any(k in name for k in IPTVSort.MOVIE_KEYWORDS):
+            movie_list.append((name, url))
             continue
 
-        # 4. 筛选卫视频道
-        if "卫视" in name_strip:
-            classify_data["卫视频道"].append((name_strip, url))
+        # 3. 香港凤凰频道
+        if any(k in name for k in IPTVSort.HK_KEYWORDS):
+            hk_list.append((name, url))
             continue
 
-    return classify_data
+        # 4. 卫视频道
+        if any(k in name for k in IPTVSort.TV_KEYWORDS):
+            tv_list.append((name, url))
+            continue
 
-def generate_txt_file(classify_data):
-    """生成OK影视格式的每日更新.txt"""
-    content = ""
-    # 按固定顺序拼接分类内容
-    # 1. 央视
-    content += "央视频道,#genre#\n"
-    for name, url in classify_data["央视频道"]:
-        content += f"{name},{url}\n"
-    content += "\n"
+    # 央视频道按数字排序
+    cctv_list.sort(key=lambda x: int(x[0].replace("CCTV","").replace("+","")))
+    return cctv_list, movie_list, hk_list, tv_list
 
-    # 2. 电影
-    content += "电影频道,#genre#\n"
-    for name, url in classify_data["电影频道"]:
-        content += f"{name},{url}\n"
-    content += "\n"
+def generate_txt(cctv, movie, hk, tv):
+    """生成标准格式每日更新.txt"""
+    content = []
+    # 央视频道
+    content.append("央视频道,#genre#")
+    for name, url in cctv:
+        content.append(f"{name},{url}")
+    content.append("")
 
-    # 3. 香港
-    content += "香港频道,#genre#\n"
-    for name, url in classify_data["香港频道"]:
-        content += f"{name},{url}\n"
-    content += "\n"
+    # 电影频道
+    content.append("电影频道,#genre#")
+    for name, url in movie:
+        content.append(f"{name},{url}")
+    content.append("")
 
-    # 4. 卫视
-    content += "卫视频道,#genre#\n"
-    for name, url in classify_data["卫视频道"]:
-        content += f"{name},{url}\n"
+    # 香港频道
+    content.append("香港频道,#genre#")
+    for name, url in hk:
+        content.append(f"{name},{url}")
+    content.append("")
+
+    # 卫视频道
+    content.append("卫视频道,#genre#")
+    for name, url in tv:
+        content.append(f"{name},{url}")
 
     # 写入文件
     with open(SAVE_FILE, "w", encoding="utf-8") as f:
-        f.write(content)
-    print(f"文件生成成功：{SAVE_FILE}")
-    return True
+        f.write("\n".join(content))
+    print(f"文件生成完成：{SAVE_FILE}")
+
+def main():
+    # 1. 采集解析源
+    source_data = get_m3u_source()
+    if not source_data:
+        return
+    # 2. 测速过滤
+    valid_data = filter_valid_source(source_data)
+    # 3. 分类整理
+    cctv_data, movie_data, hk_data, tv_data = classify_source(valid_data)
+    # 4. 生成TXT文件
+    generate_txt(cctv_data, movie_data, hk_data, tv_data)
 
 if __name__ == "__main__":
-    # 全局异常捕获，避免退出码2报错
-    try:
-        m3u_text = fetch_m3u_source()
-        if m3u_text:
-            classify_res = parse_channel_data(m3u_text)
-            generate_txt_file(classify_res)
-            print("脚本执行完成，退出码0")
-        else:
-            print("未获取到有效源数据，脚本正常退出")
-    except Exception as e:
-        print(f"脚本执行异常：{str(e)}")
+    main()
