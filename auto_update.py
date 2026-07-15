@@ -9,7 +9,7 @@ warnings.filterwarnings("ignore")
 
 # ====================== 配置区 ======================
 M3U_URL = "https://iptv-org.github.io/iptv/index.m3u"
-SAVE_FILE = "每日更新.txt"
+SAVE_FILE = "daily.txt"
 TIMEOUT = 2.0
 MAX_WORKERS = 22  # GitHub Actions推荐20~25之间，防止触发限流
 HEADERS = {
