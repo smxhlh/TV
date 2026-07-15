@@ -20,6 +20,9 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y chromium-browser chromium-chromedriver
+          # 赋予驱动执行权限
+          sudo chmod +x /usr/lib/chromium-browser/chromedriver
+          # 写入环境变量供python读取
           echo "CHROME_DRIVER_PATH=/usr/lib/chromium-browser/chromedriver" >> $GITHUB_ENV
           echo "/usr/lib/chromium-browser/" >> $GITHUB_PATH
 
