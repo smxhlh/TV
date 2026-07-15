@@ -1,7 +1,7 @@
 name: IPTV自动更新爬虫
 on:
   schedule:
-    - cron: '0 2 * * *'
+    - cron: '0 8 * * *'
   workflow_dispatch:
 
 jobs:
