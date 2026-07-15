@@ -20,30 +20,28 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y chromium-browser chromium-chromedriver
-          # 赋予驱动执行权限
           sudo chmod +x /usr/lib/chromium-browser/chromedriver
-          # 写入环境变量供python读取
           echo "CHROME_DRIVER_PATH=/usr/lib/chromium-browser/chromedriver" >> $GITHUB_ENV
           echo "/usr/lib/chromium-browser/" >> $GITHUB_PATH
 
       - name: Install Python dependencies
-        run: |
-          pip install selenium requests
+        run: pip install selenium requests
 
       - name: Run IPTV Crawler
         run: python iptv_bc.py
 
+      # 修复版文件变更检测，规范shell语法
       - name: Check file changes
         id: check_diff
         run: |
           git diff --quiet live.txt
           if [ $? -eq 0 ]; then
-            echo "changed=false" >> $GITHUB_ENV
+            echo "changed=false" >> "$GITHUB_ENV"
           else
-            echo "changed=true" >> $GITHUB_ENV
-        shell: bash
+            echo "changed=true" >> "$GITHUB_ENV"
+          fi
 
-      - name: Config git identity & Push
+      - name: Commit & Push update
         if: env.changed == 'true'
         run: |
           git config --global user.name "IPTV-AutoBot"
