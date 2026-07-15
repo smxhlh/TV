@@ -1,36 +1,57 @@
-name: 节目每日自动更新
-
-# 触发规则：每日凌晨2点自动执行 + 支持手动点击触发
+name: IPTV测速更新
 on:
+  # 每日凌晨2点定时执行
   schedule:
     - cron: '0 2 * * *'
-  workflow_dispatch:
+  # 支持仓库页面手动触发运行
+  workflow_dispatch
 
-# 运行环境
 jobs:
-  update-iptv:
+  crawl_test_push:
     runs-on: ubuntu-latest
     steps:
-      - name: 检出仓库代码
-        uses: actions/checkout@v4
+      # 拉取main分支完整仓库代码
+      - name: Checkout repository
+        uses: actions/checkout@v5
         with:
-          ref: master
+          ref: main
+          fetch-depth: 0
 
-      - name: 配置Python环境
-        uses: actions/setup-python@v5
+      # 配置Python 3.11环境
+      - name: Setup Python
+        uses: actions/setup-python@v6
         with:
           python-version: "3.11"
 
-      - name: 安装依赖
+      # 安装脚本依赖requests
+      - name: Install dependencies
         run: pip install requests
 
-      - name: 执行IPTV解析生成脚本
-        run: python update_iptv.py
+      # 运行排序测速脚本（文件名iptv_sort.py）
+      - name: Run IPTV sort & test script
+        run: python iptv_sort.py
 
-      - name: 提交更新文件
+      # 检测iptv_all.txt是否发生修改，处理diff非0退出码报错
+      - name: Check file changed
+        id: diff_check
+        shell: bash
         run: |
-          git config --global user.name "actions-user"
-          git config --global user.email "actions@github.com"
-          git add 每日更新.txt
-          git commit -m "自动更新IPTV源 $(date +'%Y-%m-%d %H:%M:%S')"
-          git push origin master
+          set +e
+          git diff --quiet iptv_all.txt
+          ret=$?
+          set -e
+          if [ $ret -eq 0 ]; then
+            echo "NEED_COMMIT=false" >> "$GITHUB_ENV"
+          else
+            echo "NEED_COMMIT=true" >> "$GITHUB_ENV"
+          fi
+
+      # 文件有改动则提交推送至main分支
+      - name: Commit and push update
+        if: env.NEED_COMMIT == 'true'
+        run: |
+          git config --global user.name "IPTV-AutoBot"
+          git config --global user.email "bot@github.com"
+          git add iptv_all.txt
+          git commit -m "Auto update IPTV $(date '+%Y-%m-%d %H:%M:%S')"
+          git push origin main
