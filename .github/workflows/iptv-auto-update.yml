@@ -8,14 +8,19 @@ jobs:
   crawl_and_push:
     runs-on: ubuntu-latest
     steps:
+      # 拉取main分支代码
       - name: Checkout repository
         uses: actions/checkout@v5
+        with:
+          ref: main
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
           python-version: "3.11"
 
+      # 安装Chrome与驱动并授权
       - name: Install Chrome & Chromedriver
         run: |
           sudo apt-get update
@@ -24,28 +29,31 @@ jobs:
           echo "CHROME_DRIVER_PATH=/usr/lib/chromium-browser/chromedriver" >> $GITHUB_ENV
           echo "/usr/lib/chromium-browser/" >> $GITHUB_PATH
 
+      # 安装依赖
       - name: Install Python dependencies
         run: pip install selenium requests
 
+      # 运行爬虫脚本
       - name: Run IPTV Crawler
         run: python iptv_bc.py
 
-      # 修复版文件变更检测，规范shell语法
+      # 判断live.txt是否发生修改（稳定写法，不会误报退出码）
       - name: Check file changes
-        id: check_diff
+        id: diff_check
         run: |
           git diff --quiet live.txt
           if [ $? -eq 0 ]; then
-            echo "changed=false" >> "$GITHUB_ENV"
+            echo "UPDATE_NEEDED=false" >> "$GITHUB_ENV"
           else
-            echo "changed=true" >> "$GITHUB_ENV"
+            echo "UPDATE_NEEDED=true" >> "$GITHUB_ENV"
           fi
 
+      # 有改动才提交推送main分支
       - name: Commit & Push update
-        if: env.changed == 'true'
+        if: env.UPDATE_NEEDED == 'true'
         run: |
           git config --global user.name "IPTV-AutoBot"
           git config --global user.email "bot@github.com"
           git add live.txt
           git commit -m "Auto update IPTV list $(date '+%Y-%m-%d %H:%M:%S')"
-          git push origin HEAD:master
+          git push origin main
