@@ -1,5 +1,4 @@
 name: IPTV自动更新爬虫
-# 触发规则：定时每日凌晨2点执行；也可手动点击运行
 on:
   schedule:
     - cron: '0 2 * * *'
@@ -9,37 +8,28 @@ jobs:
   crawl_and_push:
     runs-on: ubuntu-latest
     steps:
-      # 1. 拉取仓库代码
       - name: Checkout repository
         uses: actions/checkout@v5
-        with:
-          fetch-depth: 0
 
-      # 2. 配置Python环境
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
           python-version: "3.11"
 
-      # 3. 安装系统Chrome浏览器 & 依赖
       - name: Install Chrome & Chromedriver
         run: |
           sudo apt-get update
           sudo apt-get install -y chromium-browser chromium-chromedriver
-          # 写入chromedriver系统路径到环境变量
           echo "CHROME_DRIVER_PATH=/usr/lib/chromium-browser/chromedriver" >> $GITHUB_ENV
           echo "/usr/lib/chromium-browser/" >> $GITHUB_PATH
 
-      # 4. 安装Python依赖
       - name: Install Python dependencies
         run: |
           pip install selenium requests
 
-      # 5. 运行爬虫脚本生成live.txt
       - name: Run IPTV Crawler
         run: python iptv_bc.py
 
-      # 6. 判断文件是否有变更，无变更直接跳过提交
       - name: Check file changes
         id: check_diff
         run: |
@@ -48,19 +38,13 @@ jobs:
             echo "changed=false" >> $GITHUB_ENV
           else
             echo "changed=true" >> $GITHUB_ENV
-          fi
+        shell: bash
 
-      # 7. 配置Git用户信息
-      - name: Config git identity
+      - name: Config git identity & Push
         if: env.changed == 'true'
         run: |
           git config --global user.name "IPTV-AutoBot"
           git config --global user.email "bot@github.com"
-
-      # 8. 提交并推送更新
-      - name: Commit & Push update
-        if: env.changed == 'true'
-        run: |
           git add live.txt
           git commit -m "Auto update IPTV list $(date '+%Y-%m-%d %H:%M:%S')"
           git push origin HEAD:master
