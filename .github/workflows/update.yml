@@ -1,5 +1,4 @@
 name: IPTV每日自动更新
-
 on:
   schedule:
     - cron: '0 0 * * *'
@@ -8,29 +7,34 @@ on:
 jobs:
   update-iptv:
     runs-on: ubuntu-latest
-    timeout-minutes: 45   # 设置最大运行45分钟，超时自动终止，避免无限转圈
+    timeout-minutes: 35
     steps:
       - name: 检出仓库代码
         uses: actions/checkout@v4
 
-      - name: 配置Python环境
+      - name: 配置Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      - name: 安装依赖库
+      - name: 安装依赖
         run: |
           python -m pip install --upgrade pip
           pip install requests
 
-      - name: 执行采集测速脚本
+      - name: 运行采集脚本（生成daily.txt）
         run: python auto_update.py
 
-      - name: 提交更新文件
+      - name: 切换至master分支，提交文件
         run: |
+          git config --global core.quotepath false
           git config --global user.name "actions-user"
           git config --global user.email "actions@github.com"
-          git add "每日更新.txt"
-          # 没有变更时不报错退出
+          # 拉取远端master分支
+          git fetch origin master
+          # 切换到master分支
+          git checkout master
+          # 将刚刚生成的txt加入版本
+          git add "daily.txt"
           git commit -m "自动更新IPTV源 $(date +'%Y-%m-%d %H:%M:%S')" || echo "文件无改动，跳过提交"
           git push origin master
