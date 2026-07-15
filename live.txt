@@ -1,0 +1,30 @@
+{
+    "lives": [
+        {
+            "name": "直播1",
+            "type": 0,
+            "url": "https://eastscreen.tv/iptvlist.php?token=LlNGAh0DBA0eBAkWS1ZIAQQJCQ",
+            "playerType": 1,
+            "ua": "okhttp/3.15",
+            "epg": "https://epg.112114.eu.org/?ch={name}&date={date}"
+        },
+        {
+            "name": "直播2",
+            "type": 0,
+            "url": "https://eastscreen.tv/iptvlist.php?token=LlBFGAIEAxYFAB8JTlVIAQQJCQ",
+            "playerType": 1,
+            "ua": "okhttp/3.15",
+            "epg": "https://epg.112114.eu.org/?ch={name}&date={date}"
+        },
+        {
+            "name": "直播3",
+            "type": 0,
+            "url": "https://eastscreen.tv/iptvlist.php?token=LlNFBx0DAAseAAEBVFBDAgkGBgAI",
+            "playerType": 1,
+            "ua": "okhttp/3.15",
+            "epg": "https://epg.112114.eu.org/?ch={name}&date={date}"
+        }
+    ],
+    "update_seq": 67,
+    "last_update": "2026-07-15 08:00:41.369211"
+}
