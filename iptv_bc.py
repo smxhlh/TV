@@ -8,19 +8,18 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
 from selenium.common.exceptions import TimeoutException, WebDriverException
 
-# ===================== 全局配置（CI云端适配 修复版） =====================
+# ===================== 全局配置（CI云端适配 最终修复版） =====================
 PROXY_URL = "http://tonkiang.us/iptvproxy.php"
 CHANNEL_BASE = "http://tonkiang.us/channellist.html"
 MAX_SAVE_GROUP = 3
-# 加长等待适配CI网络
 WAIT_TIME = 120
-SLEEP_LONG = 8
-SLEEP_SHORT = 3
+SLEEP_LONG = 10
+SLEEP_SHORT = 4
 RETRY_TIMES = 3
 LOOP_WAIT_INTERVAL = 5
 MAX_LOOP_WAIT = 20
 
-# CI代理环境变量（Workflow注入 CI_HTTP_PROXY=http://xxx:port）
+# CI代理环境变量
 CI_PROXY = os.getenv("CI_HTTP_PROXY", "")
 ENABLE_CI_PROXY = bool(CI_PROXY)
 
@@ -91,7 +90,6 @@ def save_live_json(data):
 # ===================== 浏览器初始化（强化反爬+CI代理） =====================
 def init_browser():
     chrome_options = Options()
-    # CI标准无头模式
     chrome_options.add_argument("--headless=new")
     chrome_options.add_argument("--window-size=1920,1080")
     chrome_options.add_argument("--no-sandbox")
@@ -100,15 +98,12 @@ def init_browser():
     chrome_options.add_argument("--incognito")
     chrome_options.add_argument("--ignore-certificate-errors")
     chrome_options.add_argument("--allow-running-insecure-content")
-    # 统一Windows UA，避免Linux无头UA被拦截
     chrome_options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/132.0.0 Safari/537.36")
     chrome_options.add_argument("--disable-blink-features=AutomationControlled")
-    # 关闭图片加载，提升页面渲染速度
     chrome_options.add_argument("--disable-images")
     chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
     chrome_options.add_experimental_option("useAutomationExtension", False)
 
-    # CI代理开启
     if ENABLE_CI_PROXY:
         chrome_options.add_argument(f"--proxy-server={CI_PROXY}")
         print(f"CI已启用代理：{CI_PROXY}")
@@ -120,7 +115,6 @@ def init_browser():
     }
     chrome_options.add_experimental_option("prefs", prefs)
 
-    # 读取CI传入的chromedriver路径
     driver_path = os.getenv("CHROME_DRIVER_PATH")
     if driver_path and os.path.exists(driver_path):
         service = Service(executable_path=driver_path)
@@ -128,12 +122,12 @@ def init_browser():
         service = Service()
 
     driver = webdriver.Chrome(service=service, options=chrome_options)
-    # 双层隐藏webdriver爬虫特征
     driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {
         "source": """
         Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
         Object.defineProperty(navigator, 'plugins', {get: () => [1,2,3]});
         Object.defineProperty(navigator, 'languages', {get: () => ['zh-CN','zh']});
+        window.chrome = { runtime: {} };
         """
     })
     driver.set_page_load_timeout(WAIT_TIME)
@@ -146,6 +140,10 @@ def safe_get(driver, url):
         try:
             driver.get(url)
             time.sleep(SLEEP_SHORT)
+            # 新增：模拟页面滚动，触发网站加载数据
+            driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+            time.sleep(2)
+            driver.execute_script("window.scrollTo(0, 0);")
             return True
         except (TimeoutException, WebDriverException) as e:
             print(f"页面 {url} 加载失败，重试{i+1}，错误：{str(e)[:60]}")
@@ -179,7 +177,6 @@ def wait_for_ip_tk(driver):
     loop_count = 0
     while loop_count < MAX_LOOP_WAIT:
         html = driver.page_source
-        # 宽松正则：兼容空格、&amp;、换行、引号
         pattern = re.compile(
             r'ip\s*=\s*["\']?(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})["\']?\s*[&;&amp;]\s*tk\s*=\s*["\']?([a-zA-Z0-9]+)["\']?',
             re.S
@@ -194,6 +191,8 @@ def wait_for_ip_tk(driver):
                     seen.add(key)
                     clean_matches.append((ip, tk))
             return clean_matches
+        # 循环内额外模拟滚动触发JS加载
+        driver.execute_script("window.scrollBy(0, 300);")
         loop_count += 1
         print(f"等待IP/TK加载中 {loop_count}/{MAX_LOOP_WAIT}")
         time.sleep(LOOP_WAIT_INTERVAL)
@@ -219,7 +218,7 @@ def main():
     driver = None
     new_token_list = []
     try:
-        print("========== CI云端IPTV采集脚本【修复版】 ==========")
+        print("========== CI云端IPTV采集脚本【最终修复滚动触发版】 ==========")
         driver = init_browser()
         print("Linux无头Chrome启动成功")
 
@@ -252,16 +251,17 @@ def main():
             print(" 主页面加载失败")
             return
 
-        # 调试：打印页面前1000字符源码，判断是否被墙拦截
-        page_html = driver.page_source[:1000]
+        page_html = driver.page_source[:1500]
         print(f"\n【调试页面源码片段】\n{page_html}\n")
 
         ip_tk_list = wait_for_ip_tk(driver)
-        # 兜底：没拿到IP/TK则刷新页面重试一次
         if not ip_tk_list:
-            print("首次未获取IP/TK，刷新页面重试一次")
+            print("首次未获取IP/TK，刷新页面+滚动重试一次")
             driver.refresh()
             time.sleep(SLEEP_LONG)
+            # 刷新后再次模拟滚动
+            driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+            time.sleep(3)
             ip_tk_list = wait_for_ip_tk(driver)
 
         if not ip_tk_list:
