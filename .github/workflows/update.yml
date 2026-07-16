@@ -1,4 +1,4 @@
-name: IPTV Auto Update Daily 18:00
+name: IPTV公开源
 
 on:
   schedule:
