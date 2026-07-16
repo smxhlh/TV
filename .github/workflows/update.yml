@@ -1,40 +1,49 @@
-name: IPTV每日自动更新
+name: IPTV Auto Update Daily 18:00
+
 on:
   schedule:
-    - cron: '0 0 * * *'
-  workflow_dispatch:
+    # UTC时间每日18点执行，北京时间+8小时=次日凌晨2点；想要北京时间18点则改为 cron: '0 10 * * *'
+    - cron: '0 10 * * *'
+  workflow_dispatch: # 支持手动触发
 
 jobs:
-  update-iptv:
+  update_iptv:
     runs-on: ubuntu-latest
-    timeout-minutes: 35
     steps:
-      - name: 检出仓库代码
-        uses: actions/checkout@v4
-
-      - name: 配置Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
-      - name: 安装依赖
-        run: |
-          python -m pip install --upgrade pip
-          pip install requests
-
-      - name: 运行采集脚本（生成daily.txt）
-        run: python auto_update.py
-
-      - name: 切换至master分支，提交文件
+      - name: 全局Git配置
         run: |
           git config --global core.quotepath false
-          git config --global user.name "actions-user"
+          git config --global user.name "GitHub Actions Bot"
           git config --global user.email "actions@github.com"
-          # 拉取远端master分支
+
+      # 1. 拉取代码分支 main（存放脚本）
+      - name: Checkout main branch (code)
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      # 2. 拉取数据分支 master，读取旧daily.txt
+      - name: Fetch master branch data file
+        run: |
           git fetch origin master
-          # 切换到master分支
+          git checkout origin/master -- daily.txt
+          ls -la daily.txt
+
+      # 3. 安装Python依赖
+      - name: Install Python dependencies
+        run: |
+          python3 -m pip install requests
+
+      # 4. 运行更新脚本
+      - name: Run auto update script
+        run: python3 auto_update.py
+
+      # 5. 切换到master分支提交新文件
+      - name: Commit & Push to master branch
+        run: |
           git checkout master
-          # 将刚刚生成的txt加入版本
-          git add "daily.txt"
-          git commit -m "自动更新IPTV源 $(date +'%Y-%m-%d %H:%M:%S')" || echo "文件无改动，跳过提交"
+          git add daily.txt
+          git status
+          git commit -m "Auto update IPTV source $(date '+%Y-%m-%d %H:%M')"
           git push origin master
