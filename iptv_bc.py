@@ -8,16 +8,21 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
 from selenium.common.exceptions import TimeoutException, WebDriverException
 
-# ===================== 全局配置（CI云端适配） =====================
+# ===================== 全局配置（CI云端适配 修复版） =====================
 PROXY_URL = "http://tonkiang.us/iptvproxy.php"
 CHANNEL_BASE = "http://tonkiang.us/channellist.html"
 MAX_SAVE_GROUP = 3
-WAIT_TIME = 80
-SLEEP_LONG = 5
-SLEEP_SHORT = 2
-RETRY_TIMES = 2
-LOOP_WAIT_INTERVAL = 3
-MAX_LOOP_WAIT = 10
+# 加长等待适配CI网络
+WAIT_TIME = 120
+SLEEP_LONG = 8
+SLEEP_SHORT = 3
+RETRY_TIMES = 3
+LOOP_WAIT_INTERVAL = 5
+MAX_LOOP_WAIT = 20
+
+# CI代理环境变量（Workflow注入 CI_HTTP_PROXY=http://xxx:port）
+CI_PROXY = os.getenv("CI_HTTP_PROXY", "")
+ENABLE_CI_PROXY = bool(CI_PROXY)
 
 # CI环境：仓库根目录live.txt
 LIVE_FILE_LOCAL = "live.txt"
@@ -83,7 +88,7 @@ def save_live_json(data):
         print(f" 保存文件失败：{e}")
         return False
 
-# ===================== 浏览器初始化（修复缩进+读取CI驱动环境变量） =====================
+# ===================== 浏览器初始化（强化反爬+CI代理） =====================
 def init_browser():
     chrome_options = Options()
     # CI标准无头模式
@@ -93,17 +98,29 @@ def init_browser():
     chrome_options.add_argument("--disable-dev-shm-usage")
     chrome_options.add_argument("--disable-gpu")
     chrome_options.add_argument("--incognito")
-    chrome_options.add_argument("user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/132.0.0 Safari/537.36")
+    chrome_options.add_argument("--ignore-certificate-errors")
+    chrome_options.add_argument("--allow-running-insecure-content")
+    # 统一Windows UA，避免Linux无头UA被拦截
+    chrome_options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/132.0.0 Safari/537.36")
     chrome_options.add_argument("--disable-blink-features=AutomationControlled")
+    # 关闭图片加载，提升页面渲染速度
+    chrome_options.add_argument("--disable-images")
     chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
     chrome_options.add_experimental_option("useAutomationExtension", False)
+
+    # CI代理开启
+    if ENABLE_CI_PROXY:
+        chrome_options.add_argument(f"--proxy-server={CI_PROXY}")
+        print(f"CI已启用代理：{CI_PROXY}")
+
     prefs = {
         "profile.default_content_setting_values.notifications": 2,
-        "profile.default_content_setting_values.popups": 2
+        "profile.default_content_setting_values.popups": 2,
+        "profile.managed_default_content_settings.images": 2
     }
     chrome_options.add_experimental_option("prefs", prefs)
 
-    # 读取CI传入的chromedriver路径，修复else缩进问题
+    # 读取CI传入的chromedriver路径
     driver_path = os.getenv("CHROME_DRIVER_PATH")
     if driver_path and os.path.exists(driver_path):
         service = Service(executable_path=driver_path)
@@ -111,8 +128,13 @@ def init_browser():
         service = Service()
 
     driver = webdriver.Chrome(service=service, options=chrome_options)
+    # 双层隐藏webdriver爬虫特征
     driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {
-        "source": "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
+        "source": """
+        Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
+        Object.defineProperty(navigator, 'plugins', {get: () => [1,2,3]});
+        Object.defineProperty(navigator, 'languages', {get: () => ['zh-CN','zh']});
+        """
     })
     driver.set_page_load_timeout(WAIT_TIME)
     driver.set_script_timeout(WAIT_TIME)
@@ -120,11 +142,13 @@ def init_browser():
     return driver
 
 def safe_get(driver, url):
-    for _ in range(RETRY_TIMES + 1):
+    for i in range(RETRY_TIMES + 1):
         try:
             driver.get(url)
+            time.sleep(SLEEP_SHORT)
             return True
-        except (TimeoutException, WebDriverException):
+        except (TimeoutException, WebDriverException) as e:
+            print(f"页面 {url} 加载失败，重试{i+1}，错误：{str(e)[:60]}")
             time.sleep(SLEEP_LONG)
     return False
 
@@ -150,16 +174,28 @@ def check_url_alive(driver, url):
         return False
     return True
 
-# 页面正则提取函数
+# 页面正则提取函数（宽松兼容正则）
 def wait_for_ip_tk(driver):
     loop_count = 0
     while loop_count < MAX_LOOP_WAIT:
         html = driver.page_source
-        pattern = re.compile(r"ip=([\d\.]+)\s*&(?:amp;)?tk=([a-zA-Z0-9]+)")
+        # 宽松正则：兼容空格、&amp;、换行、引号
+        pattern = re.compile(
+            r'ip\s*=\s*["\']?(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})["\']?\s*[&;&amp;]\s*tk\s*=\s*["\']?([a-zA-Z0-9]+)["\']?',
+            re.S
+        )
         matches = pattern.findall(html)
         if matches:
-            return list(dict.fromkeys(matches))
+            clean_matches = []
+            seen = set()
+            for ip, tk in matches:
+                key = f"{ip}_{tk}"
+                if key not in seen and ip and tk:
+                    seen.add(key)
+                    clean_matches.append((ip, tk))
+            return clean_matches
         loop_count += 1
+        print(f"等待IP/TK加载中 {loop_count}/{MAX_LOOP_WAIT}")
         time.sleep(LOOP_WAIT_INTERVAL)
     return []
 
@@ -183,9 +219,10 @@ def main():
     driver = None
     new_token_list = []
     try:
-        print("========== CI云端IPTV采集脚本 ==========")
+        print("========== CI云端IPTV采集脚本【修复版】 ==========")
         driver = init_browser()
         print("Linux无头Chrome启动成功")
+
         log("步骤1：读取仓库内 live.txt")
         live_data = load_live_json()
         live_list = live_data["lives"]
@@ -210,10 +247,23 @@ def main():
 
         need_replace_count = len(need_replace_index)
         log(f"步骤3：共有{need_replace_count}条失效线路，采集对应数量新IP/TK")
+
         if not safe_get(driver, PROXY_URL):
             print(" 主页面加载失败")
             return
+
+        # 调试：打印页面前1000字符源码，判断是否被墙拦截
+        page_html = driver.page_source[:1000]
+        print(f"\n【调试页面源码片段】\n{page_html}\n")
+
         ip_tk_list = wait_for_ip_tk(driver)
+        # 兜底：没拿到IP/TK则刷新页面重试一次
+        if not ip_tk_list:
+            print("首次未获取IP/TK，刷新页面重试一次")
+            driver.refresh()
+            time.sleep(SLEEP_LONG)
+            ip_tk_list = wait_for_ip_tk(driver)
+
         if not ip_tk_list:
             print(" 未获取 IP/TK")
             return
@@ -249,8 +299,8 @@ def main():
         if not save_live_json(live_data):
             print(" 文件保存失败")
             return
-
         print(f"\n 采集完成！共替换 {need_replace_count} 条失效链接，等待工作流提交推送")
+
     except Exception as e:
         print(f"\n 运行异常：{str(e)}")
     finally:
