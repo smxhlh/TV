@@ -286,9 +286,9 @@ def merge_all_links():
 
 # ===================== 输出文件 =====================
 def save_merge_file():
-    now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    content = f"# IPTV全部分类源 更新时间：{now}\n# 新源测速超时：{TEST_TIMEOUT}s | 历史旧链接测速超时：{OLD_TEST_TIMEOUT}s\n# 同频道链接按响应速度从快到慢排序，包含历史可用链接\n\n"
-
+    # 删除动态now时间，固定静态头部注释
+    content = "# IPTV全部分类源\n# 新源测速超时：1.2s | 历史旧链接测速超时：1.2s\n# 同频道链接按响应速度从快到慢排序，包含历史可用链接\n\n"
+    # 下方原有拼接逻辑不变
     # 央视：兼容CCTV5+排序
     content += "央视频道,#genre#\n"
     def cctv_sort_key(name):
@@ -300,7 +300,6 @@ def save_merge_file():
         for cost, url in final_cctv[cctv_name]:
             content += f"{cctv_name},{url}\n"
     content += "\n"
-
     # 影视
     content += "影视,#genre#\n"
     sorted_movie_names = sorted(final_movie.keys())
@@ -308,7 +307,6 @@ def save_merge_file():
         for cost, url in final_movie[name]:
             content += f"{name},{url}\n"
     content += "\n"
-
     # 河南
     content += "河南频道,#genre#\n"
     sorted_henan_names = sorted(final_henan.keys())
@@ -316,23 +314,23 @@ def save_merge_file():
         for cost, url in final_henan[name]:
             content += f"{name},{url}\n"
     content += "\n"
-
     # 卫视
     content += "卫视频道,#genre#\n"
     sorted_weishi_names = sorted(final_weishi.keys())
     for name in sorted_weishi_names:
         for cost, url in final_weishi[name]:
             content += f"{name},{url}\n"
-
     with open(OUTPUT_ALL, "w", encoding="utf-8") as f:
         f.write(content)
-
     # 统计输出
     total_cctv_chan = len(final_cctv)
     total_cctv_link = sum(len(v) for v in final_cctv.values())
     total_movie_link = sum(len(v) for v in final_movie.values())
     total_henan_link = sum(len(v) for v in final_henan.values())
     total_weishi_link = sum(len(v) for v in final_weishi.values())
+    print(f"\n文件生成完成：{OUTPUT_ALL}")
+    print(f"CCTV频道数：{total_cctv_chan} 有效CCTV链接：{total_cctv_link}")
+    print(f"影视有效链接：{total_movie_link} 河南有效链接：{total_henan_link} 卫视有效链接：{total_weishi_link}")
 
     print(f"\n文件生成完成：{OUTPUT_ALL}")
     print(f"CCTV频道数：{total_cctv_chan} 有效CCTV链接：{total_cctv_link}")
