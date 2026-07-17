@@ -95,15 +95,16 @@ def test_url_speed(url: str, timeout: float):
         resp = requests.head(url, headers=HEADERS, timeout=timeout)
         resp.close()
         cost = (datetime.now() - start).total_seconds()
-        # 获取分辨率
-        res = get_video_resolution(url, timeout=1.0)
-        if res is None:
-            return None, url
-        w, h = res
-        # 过滤低于720P
-        if w < MIN_WIDTH or h < MIN_HEIGHT:
-            print(f"低清过滤 {w}×{h} {url}")
-            return None, url
+        # 临时注释分辨率检测，测试连通性是否正常
+        # res = get_video_resolution(url, timeout=1.0)
+        # if res is None:
+        #     return None, url
+        # w, h = res
+        # if w < MIN_WIDTH or h < MIN_HEIGHT:
+        #     print(f"低清过滤 {w}×{h} {url}")
+        #     return None, url
+        # 临时固定模拟1080P分辨率
+        w, h = 1920, 1080
         return (round(cost, 3), w, h, url), url
     except Exception:
         return None, url
