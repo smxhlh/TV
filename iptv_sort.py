@@ -12,11 +12,16 @@ OUTPUT_ALL = "iptv_all.txt"
 # 测速配置
 TEST_TIMEOUT = 1.2
 OLD_TEST_TIMEOUT = 1.2
-TEST_WORKERS = 12  # 降低并发，ffprobe占用CPU高
+TEST_WORKERS = 12
 REUSE_OLD_SOURCE = True
 # 分辨率阈值：低于1280*720直接丢弃
 MIN_WIDTH = 1280
 MIN_HEIGHT = 720
+# CI环境识别，Github Actions下跳过ffprobe检测
+IS_CI = os.getenv("GITHUB_ACTIONS") is not None
+# CI下默认全部源为1080P，仅按速度排序
+CI_DEFAULT_W = 1920
+CI_DEFAULT_H = 1080
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/150.0.0.0 Safari/537.36"
@@ -65,6 +70,9 @@ def get_video_resolution(url: str, timeout: float = 1.0):
         "-v", "error",
         "-print_format", "json",
         "-show_streams",
+        "-max_delay", "500000",
+        "-flags", "low_delay",
+        "-read_ahead_limit", "1024",
         "-timeout", f"{int(timeout*1000)}000",
         url
     ]
@@ -88,26 +96,30 @@ def get_video_resolution(url: str, timeout: float = 1.0):
     except Exception:
         return None
 
-# ===================== 测速工具（返回延迟+分辨率） =====================
+# ===================== 测速工具（修复返回值BUG + CI兼容） =====================
 def test_url_speed(url: str, timeout: float):
     try:
         start = datetime.now()
         resp = requests.head(url, headers=HEADERS, timeout=timeout)
         resp.close()
         cost = (datetime.now() - start).total_seconds()
-        # 临时注释分辨率检测，测试连通性是否正常
-        # res = get_video_resolution(url, timeout=1.0)
-        # if res is None:
-        #     return None, url
-        # w, h = res
-        # if w < MIN_WIDTH or h < MIN_HEIGHT:
-        #     print(f"低清过滤 {w}×{h} {url}")
-        #     return None, url
-        # 临时固定模拟1080P分辨率
-        w, h = 1920, 1080
-        return (round(cost, 3), w, h, url), url
+
+        # CI环境：跳过ffprobe，默认1080P，不做清晰度过滤
+        if IS_CI:
+            return (round(cost, 3), CI_DEFAULT_W, CI_DEFAULT_H, url)
+
+        # 本地环境：正常检测分辨率，过滤低清
+        res = get_video_resolution(url, timeout=1.0)
+        if res is None:
+            print(f"本地检测：无法获取视频流，丢弃 {url}")
+            return None
+        w, h = res
+        if w < MIN_WIDTH or h < MIN_HEIGHT:
+            print(f"本地检测：低清 {w}×{h}，丢弃 {url}")
+            return None
+        return (round(cost, 3), w, h, url)
     except Exception:
-        return None, url
+        return None
 
 def batch_test_speed(channel_url_list, timeout: float, workers: int):
     channel_speed_dict = {}
@@ -118,13 +130,14 @@ def batch_test_speed(channel_url_list, timeout: float, workers: int):
         future_map = {executor.submit(test_url_speed, url, timeout): name for name, url in task_list}
         for future in as_completed(future_map):
             chan_name = future_map[future]
-            res_data, url = future.result()
+            res_data = future.result()
+            # 修复：不再拆分多余url，直接读取元组
             if res_data is not None:
                 cost, w, h, u = res_data
                 if chan_name not in channel_speed_dict:
                     channel_speed_dict[chan_name] = []
                 channel_speed_dict[chan_name].append((cost, w, h, u))
-    # 排序核心：分辨率从高到低，同分辨率延迟从小到大
+    # 排序规则：分辨率从高到低，同分辨率延迟从小到大
     for k in channel_speed_dict:
         channel_speed_dict[k].sort(key=lambda x: (-x[1], -x[2], x[0]))
     return channel_speed_dict
@@ -177,7 +190,7 @@ def test_old_links():
         if real_name not in old_speed_map[cat]:
             old_speed_map[cat][real_name] = []
         old_speed_map[cat][real_name].extend(speed_url_list)
-    print("旧链接测速完成，过滤低清与无法访问链接")
+    print("旧链接测速完成")
 
 # ===================== 抓取解析新M3U源 =====================
 def fetch_m3u_source() -> str:
@@ -313,10 +326,9 @@ def merge_all_links():
         final_weishi[name] = unique_tmp
     print("\n旧链接+新源链接合并完成，去重后按【分辨率高优先、速度次之】排序")
 
-# ===================== 输出文件 =====================
+# ===================== 输出文件（移除动态时间戳，解决git重复提交） =====================
 def save_merge_file():
-    # 移除动态时间戳，解决git每次都判定变更
-    content = "# IPTV全部分类源\n# 测速超时：1.2s | 自动过滤分辨率<1280*720低清源\n# 排序规则：分辨率从高到低，同分辨率响应速度从快到慢\n\n"
+    content = "# IPTV全部分类源\n# 测速超时：1.2s | CI环境跳过分辨率检测，本地自动过滤分辨率<1280*720低清源\n# 排序规则：分辨率从高到低，同分辨率响应速度从快到慢\n\n"
     # 央视排序
     content += "央视频道,#genre#\n"
     def cctv_sort_key(name):
@@ -362,7 +374,8 @@ def save_merge_file():
     print(f"影视高清链接：{total_movie_link} 河南高清链接：{total_henan_link} 卫视高清链接：{total_weishi_link}")
 
 def main():
-    print("===== M3U IPTV 高清测速合并工具（分辨率优先排序） =====")
+    print("===== M3U IPTV 高清测速合并工具（CI兼容版） =====")
+    print(f"当前运行环境：{'Github Actions CI' if IS_CI else '本地电脑'}")
     if REUSE_OLD_SOURCE:
         load_old_links()
         test_old_links()
