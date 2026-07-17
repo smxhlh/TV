@@ -46,5 +46,16 @@ jobs:
       - name: 自动提交并推送更新后的iptv_all.txt
         run: |
           git add iptv_all.txt
-          # 无变更则跳过提交，有变更自动推送
-          git diff --quiet && echo "频道列表无更新，无需提交" || (git commit -m "自动测速更新IPTV源 $(date '+%Y-%m-%d %H:%M')" && git push)
+          # 打印完整差异，用于日志排查
+          echo "===== 当前文件diff详情 ====="
+          git diff --cached
+          echo "==========================="
+          # 判断是否存在非注释行变更
+          # 过滤所有#开头注释，剩余有内容代表频道数据变化
+          DIFF_CONTENT=$(git diff --cached | grep -v '^#' | wc -l)
+          if [ "$DIFF_CONTENT" -eq 0 ]; then
+            echo "仅注释时间变更/无频道数据更新，无需提交"
+          else
+            git commit -m "自动测速更新IPTV源 $(date '+%Y-%m-%d %H:%M')"
+            git push
+          fi
