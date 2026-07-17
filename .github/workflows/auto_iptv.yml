@@ -1,6 +1,15 @@
 name: IPTV源自动提取
 run-name: ${{ github.actor }} 触发IPTV测速更新
 
+# 授予推送代码写入权限（解决git push 403）
+permissions:
+  contents: write
+
+# 并发控制：同一分支只允许一个任务运行，避免提交冲突
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 # 触发规则：每日北京时间6点、18点定时 + 手动触发 + push代码触发
 on:
   workflow_dispatch: # 页面手动运行按钮
@@ -31,9 +40,10 @@ jobs:
           python-version: '3.11'
           cache: 'pip' # 缓存依赖包加速构建
 
-      - name: 安装Python依赖
+      - name: 安装Python依赖 + ffmpeg
         run: |
           pip install requests
+          sudo apt update && sudo apt install -y ffmpeg
 
       - name: 执行IPTV测速脚本
         run: python iptv_sort.py
@@ -43,17 +53,17 @@ jobs:
           git config --global user.name "IPTV-AutoBot"
           git config --global user.email "bot@github.com"
 
-       - name: 自动提交并推送更新后的iptv_all.txt
-         run: |
-           git add iptv_all.txt
-           echo "===== 文件差异日志 ====="
-           git diff --cached
-           echo "========================"
-           # 过滤注释行，仅判断真实频道数据变更
-           CHANNEL_CHANGE=$(git diff --cached | grep -v '^#' | wc -l)
-           if [ "$CHANNEL_CHANGE" -eq 0 ]; then
-             echo "高清频道链接无变化，无需提交"
-           else
-             git commit -m "高清源自动更新 $(date '+%Y-%m-%d %H:%M')"
-             git push
-           fi
+      - name: 自动提交并推送更新后的iptv_all.txt
+        run: |
+          git add iptv_all.txt
+          echo "===== 文件差异日志 ====="
+          git diff --cached
+          echo "========================"
+          # 过滤注释行，仅判断真实频道数据变更
+          CHANNEL_CHANGE=$(git diff --cached | grep -v '^#' | wc -l)
+          if [ "$CHANNEL_CHANGE" -eq 0 ]; then
+            echo "高清频道链接无变化，无需提交"
+          else
+            git commit -m "高清源自动更新 $(date '+%Y-%m-%d %H:%M')"
+            git push
+          fi
