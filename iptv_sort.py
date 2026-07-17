@@ -286,9 +286,8 @@ def merge_all_links():
 
 # ===================== 输出文件 =====================
 def save_merge_file():
-    # 删除动态now时间，固定静态头部注释
-    content = "# IPTV全部分类源\n# 新源测速超时：1.2s | 历史旧链接测速超时：1.2s\n# 同频道链接按响应速度从快到慢排序，包含历史可用链接\n\n"
-    # 下方原有拼接逻辑不变
+    # 移除动态时间戳，解决每次运行文件必变导致git误判更新
+    content = "# IPTV全部分类源\n# 测速超时：1.2s | 过滤分辨率<1280*720低清源\n# 同频道链接按响应速度从快到慢排序，仅保留720P及以上清晰度\n\n"
     # 央视：兼容CCTV5+排序
     content += "央视频道,#genre#\n"
     def cctv_sort_key(name):
@@ -307,13 +306,14 @@ def save_merge_file():
         for cost, url in final_movie[name]:
             content += f"{name},{url}\n"
     content += "\n"
-    # 河南
-    content += "河南频道,#genre#\n"
-    sorted_henan_names = sorted(final_henan.keys())
-    for name in sorted_henan_names:
-        for cost, url in final_henan[name]:
-            content += f"{name},{url}\n"
-    content += "\n"
+    # 河南频道（无数据则不输出区块）
+    if len(final_henan) > 0:
+        content += "河南频道,#genre#\n"
+        sorted_henan_names = sorted(final_henan.keys())
+        for name in sorted_henan_names:
+            for cost, url in final_henan[name]:
+                content += f"{name},{url}\n"
+        content += "\n"
     # 卫视
     content += "卫视频道,#genre#\n"
     sorted_weishi_names = sorted(final_weishi.keys())
@@ -329,12 +329,8 @@ def save_merge_file():
     total_henan_link = sum(len(v) for v in final_henan.values())
     total_weishi_link = sum(len(v) for v in final_weishi.values())
     print(f"\n文件生成完成：{OUTPUT_ALL}")
-    print(f"CCTV频道数：{total_cctv_chan} 有效CCTV链接：{total_cctv_link}")
-    print(f"影视有效链接：{total_movie_link} 河南有效链接：{total_henan_link} 卫视有效链接：{total_weishi_link}")
-
-    print(f"\n文件生成完成：{OUTPUT_ALL}")
-    print(f"CCTV频道数：{total_cctv_chan} 有效CCTV链接：{total_cctv_link}")
-    print(f"影视有效链接：{total_movie_link} 河南有效链接：{total_henan_link} 卫视有效链接：{total_weishi_link}")
+    print(f"CCTV频道数：{total_cctv_chan} 有效高清CCTV链接：{total_cctv_link}")
+    print(f"影视高清链接：{total_movie_link} 河南高清链接：{total_henan_link} 卫视高清链接：{total_weishi_link}")
 
 def main():
     print("===== M3U IPTV 新旧链接合并测速工具 =====")
