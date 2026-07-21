@@ -11,7 +11,7 @@
         {
             "name": "直播2",
             "type": 0,
-            "url": "https://eastscreen.tv/iptvlist.php?token=LlNKBR0ABAgeAwMBVFVIAQQJCQ",
+            "url": "https://eastscreen.tv/iptvlist.php?token=LlBABR0DBQkeAAILVFNBBgkGBgAI",
             "playerType": 1,
             "ua": "okhttp/3.15",
             "epg": "https://epg.112114.eu.org/?ch={name}&date={date}"
@@ -25,6 +25,6 @@
             "epg": "https://epg.112114.eu.org/?ch={name}&date={date}"
         }
     ],
-    "update_seq": 74,
-    "last_update": "2026-07-21 07:49:38.393852"
+    "update_seq": 75,
+    "last_update": "2026-07-21 14:02:51.926371"
 }
