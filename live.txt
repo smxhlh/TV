@@ -1,27 +1,27 @@
 {
     "lives": [
         {
-            "name": "IPTV1",
+            "name": "直播1",
             "type": 0,
             "url": "https://eastscreen.tv/iptvlist.php?token=LlRDGAYCHwkHBh8MS1hFAQsJ",
             "playerType": 2,
             "timeout": 10
         },
         {
-            "name": "IPTV2",
+            "name": "直播2",
             "type": 0,
-            "url": "https://eastscreen.tv/iptvlist.php?token=LlNCAB0FAxYBAgkWS1VGDAQGCQA",
+            "url": "https://eastscreen.tv/iptvlist.php?token=LlNDBB0AAQseAwUJVFFHDAIDAgw",
             "playerType": 2,
             "timeout": 10
         },
         {
-            "name": "IPTV3",
+            "name": "直播3",
             "type": 0,
             "url": "https://eastscreen.tv/iptvlist.php?token=LlNDAB0EAxYBBQIWS1FGDAIDAgw",
             "playerType": 2,
             "timeout": 10
         }
     ],
-    "update_seq": 7,
-    "last_update": "2026-07-22 08:17:40.753607"
+    "update_seq": 8,
+    "last_update": "2026-07-22 08:30:07.389311"
 }
