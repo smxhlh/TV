@@ -17,12 +17,13 @@ REUSE_OLD_SOURCE = True
 # 分辨率阈值：低于1280*720直接丢弃
 MIN_WIDTH = 1280
 MIN_HEIGHT = 720
+# 单频道最多保留最优线路数量（超出直接丢弃）
+MAX_SOURCE_PER_CHANNEL = 10
 # CI环境识别，Github Actions下跳过ffprobe检测
 IS_CI = os.getenv("GITHUB_ACTIONS") is not None
 # CI下默认全部源为1080P，仅按速度排序
 CI_DEFAULT_W = 1920
 CI_DEFAULT_H = 1080
-
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/150.0.0.0 Safari/537.36"
 }
@@ -36,14 +37,16 @@ HENAN_CHANNELS = {
 # 影视关键词
 MOVIE_KEYS = [
     "IPTV经典电影", "动作电影", "家庭影院",
-    "电影", "相声小品", "经典电影","喜剧影院","星影"
+    "电影", "相声小品", "经典电影", "喜剧影院", "星影"
 ]
+
 # 新抓取原始存储（未测速）
 raw_cctv = []
 raw_henan = []
 raw_weishi = []
 raw_movie = []
 url_unique = set()
+
 # 旧文件读取存储
 old_channel_links = []  # [(name, url)]
 old_speed_map = {
@@ -52,38 +55,43 @@ old_speed_map = {
     "weishi": {},
     "movie": {}
 }
+
 # 测速后存储（新源），元素 (cost, w, h, url)
 new_cctv_speed_map = {}
 new_movie_speed_map = {}
 new_henan_speed_map = {}
 new_weishi_speed_map = {}
+
 # 最终合并结果
 final_cctv = {}
 final_movie = {}
 final_henan = {}
 final_weishi = {}
 
-# ===================== 分辨率检测工具 =====================
+# ===================== 分辨率检测工具【重构优化】 =====================
 def get_video_resolution(url: str, timeout: float = 1.0):
     cmd = [
         "ffprobe",
         "-v", "error",
         "-print_format", "json",
         "-show_streams",
-        "-max_delay", "500000",
+        "-max_delay", "800000",       # 延长媒体缓冲等待
         "-flags", "low_delay",
-        "-read_ahead_limit", "1024",
+        "-read_ahead_limit", "2048",
         "-timeout", f"{int(timeout*1000)}000",
+        "-user_agent", HEADERS["User-Agent"],  # 携带UA防拦截
         url
     ]
     try:
+        # ffprobe额外增加2秒容错超时
         result = subprocess.run(
             cmd,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
-            timeout=timeout + 1
+            timeout=timeout + 2
         )
+        # 命令执行失败直接返回None
         if result.returncode != 0:
             return None
         data = json.loads(result.stdout)
@@ -91,34 +99,64 @@ def get_video_resolution(url: str, timeout: float = 1.0):
             if stream["codec_type"] == "video":
                 w = int(stream.get("width", 0))
                 h = int(stream.get("height", 0))
+                # 宽高为0无效流直接丢弃
+                if w <= 0 or h <= 0:
+                    return None
                 return (w, h)
+        # 无视频轨道（纯音频）丢弃
         return None
     except Exception:
         return None
 
-# ===================== 测速工具（修复返回值BUG + CI兼容） =====================
+# ===================== 测速工具【完全重写，严格过滤失效/低清源】 =====================
 def test_url_speed(url: str, timeout: float):
     try:
         start = datetime.now()
-        resp = requests.head(url, headers=HEADERS, timeout=timeout)
+        # 开启自动重定向，兼容302直播源跳转
+        resp = requests.head(
+            url,
+            headers=HEADERS,
+            timeout=timeout,
+            allow_redirects=True
+        )
         resp.close()
-        cost = (datetime.now() - start).total_seconds()
+        # 校验HTTP状态码，非2xx直接判定失效
+        if not (200 <= resp.status_code < 300):
+            print(f"[失效] 异常状态码{resp.status_code} | {url}")
+            return None
 
-        # CI环境：跳过ffprobe，默认1080P，不做清晰度过滤
+        cost = (datetime.now() - start).total_seconds()
+        # CI环境跳过分辨率检测，全部视为1080P有效源
         if IS_CI:
             return (round(cost, 3), CI_DEFAULT_W, CI_DEFAULT_H, url)
 
-        # 本地环境：正常检测分辨率，过滤低清
+        # 本地环境执行分辨率检测
         res = get_video_resolution(url, timeout=1.0)
         if res is None:
-            print(f"本地检测：无法获取视频流，丢弃 {url}")
+            print(f"[失效] ffprobe无法解析视频流 | {url}")
             return None
+
         w, h = res
+        # 低于720P直接丢弃
         if w < MIN_WIDTH or h < MIN_HEIGHT:
-            print(f"本地检测：低清 {w}×{h}，丢弃 {url}")
+            print(f"[低清丢弃] {w}×{h} < 1280×720 | {url}")
             return None
+
+        # 合格高清有效源返回
+        print(f"[有效高清] 延迟{round(cost,3)}s {w}×{h} | {url}")
         return (round(cost, 3), w, h, url)
-    except Exception:
+
+    except requests.exceptions.Timeout:
+        print(f"[失效] 请求超时 | {url}")
+        return None
+    except requests.exceptions.ConnectionError:
+        print(f"[失效] 无法连接服务器 | {url}")
+        return None
+    except requests.exceptions.SSLError:
+        print(f"[失效] SSL证书异常 | {url}")
+        return None
+    except Exception as e:
+        print(f"[失效] 未知异常 {str(e)} | {url}")
         return None
 
 def batch_test_speed(channel_url_list, timeout: float, workers: int):
@@ -131,7 +169,7 @@ def batch_test_speed(channel_url_list, timeout: float, workers: int):
         for future in as_completed(future_map):
             chan_name = future_map[future]
             res_data = future.result()
-            # 修复：不再拆分多余url，直接读取元组
+            # res_data为None代表失效/低清，直接跳过不存入结果
             if res_data is not None:
                 cost, w, h, u = res_data
                 if chan_name not in channel_speed_dict:
@@ -178,9 +216,16 @@ def classify_old_channel(name: str, url: str):
         return "weishi", name
     return None, None
 
+# ===================== 旧链接测速【关键修复：每次测速清空旧缓存】 =====================
 def test_old_links():
     if not old_channel_links:
         return
+    # 每次运行清空旧测速缓存，彻底淘汰本次测速失效的历史源
+    old_speed_map["cctv"].clear()
+    old_speed_map["henan"].clear()
+    old_speed_map["weishi"].clear()
+    old_speed_map["movie"].clear()
+
     print(f"\n开始测速旧历史链接，并发{TEST_WORKERS}，超时{OLD_TEST_TIMEOUT}s")
     old_all_speed = batch_test_speed(old_channel_links, OLD_TEST_TIMEOUT, TEST_WORKERS)
     for chan_name, speed_url_list in old_all_speed.items():
@@ -190,7 +235,8 @@ def test_old_links():
         if real_name not in old_speed_map[cat]:
             old_speed_map[cat][real_name] = []
         old_speed_map[cat][real_name].extend(speed_url_list)
-    print("旧链接测速完成")
+    print("旧链接测速完成，当前有效历史源统计：")
+    print(f"央视:{len(old_speed_map['cctv'])} 河南:{len(old_speed_map['henan'])} 卫视:{len(old_speed_map['weishi'])} 影视:{len(old_speed_map['movie'])}")
 
 # ===================== 抓取解析新M3U源 =====================
 def fetch_m3u_source() -> str:
@@ -241,7 +287,7 @@ def classify_channel(name: str, url: str):
         raw_weishi.append((name, url))
         print(f" -> 归入卫视：{name}")
         return
-    print(f" -> 无匹配，丢弃：{name}")
+    print(f" -> 无匹配分类，丢弃：{name}")
 
 # ===================== 测速新抓取源 =====================
 def test_new_source():
@@ -253,7 +299,7 @@ def test_new_source():
     new_weishi_speed_map = batch_test_speed(raw_weishi, TEST_TIMEOUT, TEST_WORKERS)
     print(f"新源测速完成")
 
-# ===================== 合并旧有效链接 + 新测速链接 =====================
+# ===================== 合并旧有效链接 + 新测速链接【新增线路截断】 =====================
 def merge_all_links():
     # 合并央视
     all_cctv_names = set(old_speed_map["cctv"].keys()) | set(new_cctv_speed_map.keys())
@@ -272,6 +318,8 @@ def merge_all_links():
             if u not in url_set:
                 url_set.add(u)
                 unique_tmp.append((cost, w, h, u))
+        # 截断，只保留最优MAX_SOURCE_PER_CHANNEL条，劣质链路直接丢弃
+        unique_tmp = unique_tmp[:MAX_SOURCE_PER_CHANNEL]
         final_cctv[name] = unique_tmp
 
     # 合并影视
@@ -289,6 +337,7 @@ def merge_all_links():
             if u not in url_set:
                 url_set.add(u)
                 unique_tmp.append((cost, w, h, u))
+        unique_tmp = unique_tmp[:MAX_SOURCE_PER_CHANNEL]
         final_movie[name] = unique_tmp
 
     # 合并河南
@@ -306,6 +355,7 @@ def merge_all_links():
             if u not in url_set:
                 url_set.add(u)
                 unique_tmp.append((cost, w, h, u))
+        unique_tmp = unique_tmp[:MAX_SOURCE_PER_CHANNEL]
         final_henan[name] = unique_tmp
 
     # 合并卫视
@@ -323,12 +373,14 @@ def merge_all_links():
             if u not in url_set:
                 url_set.add(u)
                 unique_tmp.append((cost, w, h, u))
+        unique_tmp = unique_tmp[:MAX_SOURCE_PER_CHANNEL]
         final_weishi[name] = unique_tmp
-    print("\n旧链接+新源链接合并完成，去重后按【分辨率高优先、速度次之】排序")
 
-# ===================== 输出文件（移除动态时间戳，解决git重复提交） =====================
+    print("\n旧链接+新源链接合并完成，去重后按【分辨率高优先、速度次之】排序，单频道最多保留{}条最优线路".format(MAX_SOURCE_PER_CHANNEL))
+
+# ===================== 输出文件 =====================
 def save_merge_file():
-    content = "# IPTV全部分类源\n# 测速超时：1.2s | CI环境跳过分辨率检测，本地自动过滤分辨率<1280*720低清源\n# 排序规则：分辨率从高到低，同分辨率响应速度从快到慢\n\n"
+    content = "# IPTV全部分类源\n# 测速超时：{}s | CI环境跳过分辨率检测，本地自动过滤分辨率<1280*720低清源\n# 排序规则：分辨率从高到低，同分辨率响应速度从快到慢\n# 单频道最多保留{}条最优有效线路，失效/低清源自动丢弃\n\n".format(TEST_TIMEOUT, MAX_SOURCE_PER_CHANNEL)
     # 央视排序
     content += "央视频道,#genre#\n"
     def cctv_sort_key(name):
@@ -374,7 +426,7 @@ def save_merge_file():
     print(f"影视高清链接：{total_movie_link} 河南高清链接：{total_henan_link} 卫视高清链接：{total_weishi_link}")
 
 def main():
-    print("===== M3U IPTV 高清测速合并工具（CI兼容版） =====")
+    print("===== M3U IPTV 高清测速合并工具（失效/低清源自动剔除版） =====")
     print(f"当前运行环境：{'Github Actions CI' if IS_CI else '本地电脑'}")
     if REUSE_OLD_SOURCE:
         load_old_links()
