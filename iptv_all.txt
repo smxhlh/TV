@@ -304,7 +304,6 @@ CHC电影,http://112.27.5.218:9901/tsfile/live/faacts/1038_1.m3u8?key=txiptv&pla
 河北卫视,http://221.226.51.220:50081/newlive/live/hls/33/live.m3u8
 河北卫视,http://112.237.235.213:9989/tsfile/live/0117_1.m3u8?key=txiptv&playlive=1&authid=0
 河北卫视,http://182.140.125.47:808/hls/43/index.m3u8
-河南卫视,http://112.27.5.218:9901/tsfile/live/0139_1.m3u8?key=txiptv&playlive=1&authid=0
 河南卫视,http://42.237.164.92:9901/tsfile/live/1001_1.m3u8?key=txiptv&playlive=1&authid=0
 河南卫视,http://182.140.125.47:808/hls/45/index.m3u8
 浙江卫视,http://112.27.5.218:9901/tsfile/live/0124_1.m3u8?key=txiptv&playlive=1&authid=0
