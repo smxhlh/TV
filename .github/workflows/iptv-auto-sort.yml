@@ -1,10 +1,10 @@
-name: IPTV M3U Auto Sort
-run-name: IPTV分拣流水线运行
+name: IPTV Auto Sort
+run-name: IPTV自动分拣生成sou.txt
 
 on:
-  workflow_dispatch: # 支持手动点击运行
+  workflow_dispatch:
   schedule:
-    - cron: '0 3 * * *' # UTC时间凌晨3点 ≈国内上午11点，可自行调整
+    - cron: '0 3 * * *'
 
 jobs:
   build-sort:
@@ -15,7 +15,7 @@ jobs:
         with:
           fetch-depth: 1
 
-      - name: 安装系统依赖 FFmpeg
+      - name: 安装FFmpeg
         run: sudo apt update && sudo apt install -y ffmpeg
 
       - name: 设置Python
@@ -24,23 +24,23 @@ jobs:
           python-version: "3.11"
           cache: "pip"
 
-      - name: 安装python依赖
+      - name: 安装依赖
         run: pip install -r requirements.txt
 
       - name: 运行分拣程序
         run: python main.py
 
-      - name: 配置git提交信息
+      - name: Git配置
         run: |
           git config --global user.name "IPTV-Bot"
           git config --global user.email "bot@github.com"
 
-      - name: 提交更新文件
+      - name: 提交更新 sou.txt
         run: |
-          git add output/sorted.m3u
+          git add sou.txt
           if git diff --cached --quiet; then
             echo "频道列表无更新，跳过提交"
           else
-            git commit -m "🤖 自动更新分拣后的iptv m3u清单 $(date '+%Y-%m-%d %H:%M')"
+            git commit -m "🤖 自动更新sou.txt  $(date '+%Y-%m-%d %H:%M')"
             git push
           fi
