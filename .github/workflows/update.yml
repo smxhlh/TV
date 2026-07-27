@@ -13,15 +13,6 @@ jobs:
       group: iptv-update-lock
       cancel-in-progress: false
     steps:
-      # 改用dd创建swap，解决fallocate文件占用报错
-      - name: 扩容Swap虚拟内存
-        run: |
-          sudo dd if=/dev/zero of=/swapfile bs=1G count=2 status=progress
-          sudo chmod 600 /swapfile
-          sudo mkswap /swapfile
-          sudo swapon /swapfile
-          free -h
-
       - name: Git全局配置
         run: |
           git config --global core.quotepath false
