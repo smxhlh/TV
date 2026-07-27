@@ -3,30 +3,84 @@ import re
 import time
 import os
 import warnings
+import subprocess
+import json
 from concurrent.futures import ThreadPoolExecutor, as_completed
+
 # 关闭ssl警告
 warnings.filterwarnings("ignore")
+
 # ====================== 配置区 ======================
 M3U_URL = "https://live.zbds.top/tv/iptv4.txt"
 SAVE_FILE = "daily.txt"
 TIMEOUT = 2.0
-# 降低并发，适配Github Actions服务器限流
+# ffmpeg探测超时(秒)
+FFMPEG_TIMEOUT = 4
 MAX_WORKERS = 12
+# 最低分辨率阈值 1280×720
+MIN_WIDTH = 1280
+MIN_HEIGHT = 720
+
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 }
-# 分支配置
 CODE_BRANCH = "main"
 DATA_BRANCH = "master"
 # ====================================================
+
 class IPTVSort:
     CCTV_PATTERN = re.compile(r"CCTV\-?(\d{1,2})\+?", re.IGNORECASE)
     MOVIE_KEYWORDS = {"电影", "影院"}
     HK_KEYWORDS = {"凤凰"}
     TV_KEYWORDS = {"卫视"}
 
+
+def check_ffmpeg_exists():
+    """检测环境是否有ffmpeg"""
+    try:
+        subprocess.run(["ffmpeg", "-version"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+        return True
+    except Exception:
+        print("错误：环境未安装ffmpeg，无法执行分辨率检测！")
+        return False
+
+
+def get_stream_resolution(url: str):
+    """
+    使用ffprobe获取视频流分辨率
+    返回 (width, height)，失败返回 None
+    """
+    cmd = [
+        "ffprobe",
+        "-v", "error",
+        "-print_format", "json",
+        "-show_streams",
+        "-timeout", str(FFMPEG_TIMEOUT * 1000000),
+        url
+    ]
+    try:
+        result = subprocess.run(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=FFMPEG_TIMEOUT
+        )
+        if result.returncode != 0:
+            return None
+        data = json.loads(result.stdout)
+        for stream in data.get("streams", []):
+            if stream.get("codec_type") == "video":
+                w = stream.get("width")
+                h = stream.get("height")
+                if w and h:
+                    return (int(w), int(h))
+        return None
+    except Exception:
+        return None
+
+
 def load_old_daily() -> list[tuple[str, str]]:
-    """读取master分支拉取的旧daily.txt，返回[(名称,链接)]"""
     old_list = []
     if not os.path.exists(SAVE_FILE):
         print("未找到旧版daily.txt，无存量数据")
@@ -50,9 +104,9 @@ def load_old_daily() -> list[tuple[str, str]]:
     print(f"读取存量频道总数：{len(old_list)}")
     return old_list
 
+
 def get_m3u_source():
     print("【步骤1】开始下载M3U源文件...")
-    # 增加重试机制
     retry = 3
     content = ""
     while retry > 0:
@@ -83,8 +137,9 @@ def get_m3u_source():
     print(f"【步骤1完成】解析新源有效HTTP链接总数：{len(source_list)}")
     return source_list
 
+
 def test_single_url(item):
-    """测速，返回(名称,链接,耗时ms)，失效返回None"""
+    """基础连通测速，不通直接丢弃"""
     name, url = item
     start = time.time()
     try:
@@ -102,9 +157,10 @@ def test_single_url(item):
         pass
     return None
 
+
 def multi_thread_test(source_list):
     valid_result = []
-    print("【步骤2】启动多线程统一测速……")
+    print("【步骤2】多线程连通测速，剔除无法访问链接……")
     total = len(source_list)
     finished_count = 0
     if total == 0:
@@ -119,14 +175,43 @@ def multi_thread_test(source_list):
             data = task.result()
             if data:
                 valid_result.append(data)
-    # 按测速耗时升序，速度越快越靠前
     valid_result.sort(key=lambda x: x[2])
-    print(f"【步骤2完成】测速完毕，可用播放源：{len(valid_result)}")
-    # 去掉耗时，只保留频道名+链接
+    print(f"【步骤2完成】连通可用链接：{len(valid_result)}")
     return [(name, url) for name, url, _ in valid_result]
 
+
+def filter_by_resolution(valid_links):
+    """
+    FFmpeg分辨率过滤：只保留 ≥720P 视频流
+    valid_links: [(name, url)]
+    return: 符合清晰度的列表
+    """
+    print(f"【步骤3】开始FFmpeg分辨率检测，总量{len(valid_links)}……")
+    qualified = []
+    total = len(valid_links)
+    cnt = 0
+    ffmpeg_ok = check_ffmpeg_exists()
+    if not ffmpeg_ok:
+        print("ffmpeg不可用，终止程序")
+        raise SystemExit(1)
+
+    for name, url in valid_links:
+        cnt += 1
+        if cnt % 50 == 0:
+            print(f"分辨率检测进度 {cnt}/{total}")
+        res = get_stream_resolution(url)
+        if res is None:
+            # 无法获取流信息，丢弃
+            continue
+        w, h = res
+        # 宽高任一达标即判定720P（兼容16:9/4:3）
+        if w >= MIN_WIDTH and h >= MIN_HEIGHT:
+            qualified.append((name, url))
+    print(f"【步骤3完成】分辨率≥720P有效源：{len(qualified)}")
+    return qualified
+
+
 def merge_and_deduplicate(old_list, new_list):
-    """合并新旧数据，按链接去重，保留第一次出现（测速更快的）"""
     all_items = old_list + new_list
     unique_map = {}
     for name, url in all_items:
@@ -135,6 +220,7 @@ def merge_and_deduplicate(old_list, new_list):
     merged = [(name, url) for url, name in unique_map.items()]
     print(f"新旧合并去重后总频道：{len(merged)}")
     return merged
+
 
 def classify_source(valid_list):
     cctv_list = []
@@ -166,16 +252,16 @@ def classify_source(valid_list):
         if any(k in name for k in IPTVSort.TV_KEYWORDS):
             tv_list.append((name, url))
             continue
-    # CCTV数字排序
+
     def sort_key(item):
         n = item[0].replace("CCTV", "").replace("+", "")
         return int(n) if n.isdigit() else 999
     cctv_list.sort(key=sort_key)
     return cctv_list, movie_list, hk_list, tv_list
 
+
 def generate_output_txt(cctv, movie, hk, tv):
     try:
-        # 覆盖前先清空旧文件
         if os.path.exists(SAVE_FILE):
             os.remove(SAVE_FILE)
         lines = []
@@ -196,33 +282,41 @@ def generate_output_txt(cctv, movie, hk, tv):
             lines.append(f"{ch_name},{ch_url}")
         with open(SAVE_FILE, "w", encoding="utf-8") as f:
             f.write("\n".join(lines))
-        print(f"【步骤3完成】文件 {SAVE_FILE} 生成成功！")
+        print(f"【步骤4完成】文件 {SAVE_FILE} 生成成功！")
     except Exception as e:
         print(f"生成文件失败: {str(e)}")
         raise SystemExit(1)
 
+
 def main():
     start_time = time.time()
-    # 1. 读取master分支存量旧数据
+    # 1. 读取旧源
     old_data = load_old_daily()
-    # 2. 获取新M3U源
+    # 2. 拉取新M3U
     new_data = get_m3u_source()
     if not old_data and not new_data:
         print("无任何新旧播放源，程序退出")
         raise SystemExit(1)
     # 3. 合并去重
     merged_all = merge_and_deduplicate(old_data, new_data)
-    # 4. 全部统一测速+按速度排序
-    valid_sorted = multi_thread_test(merged_all)
-    if not valid_sorted:
-        print("测速后无有效可用源，终止执行")
+    # 4. 连通测速，丢弃打不开链接
+    reachable = multi_thread_test(merged_all)
+    if not reachable:
+        print("无任何可连通播放源，终止")
         raise SystemExit(1)
-    # 5. 分类频道
-    cctv_data, movie_data, hk_data, tv_data = classify_source(valid_sorted)
-    # 6. 生成文件
+    # 5. FFmpeg过滤分辨率，低于720P全部丢弃
+    hd_sources = filter_by_resolution(reachable)
+    if not hd_sources:
+        print("无分辨率≥720P有效频道，终止")
+        raise SystemExit(1)
+    # 6. 频道分类
+    cctv_data, movie_data, hk_data, tv_data = classify_source(hd_sources)
+    # 7. 写出txt
     generate_output_txt(cctv_data, movie_data, hk_data, tv_data)
+
     cost = round(time.time() - start_time, 2)
     print(f"\n===== 全部任务执行完毕，总耗时：{cost} 秒 =====")
+
 
 if __name__ == "__main__":
     main()
