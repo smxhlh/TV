@@ -10,14 +10,16 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 # 关闭ssl警告
 warnings.filterwarnings("ignore")
 
-# ====================== 配置区 轻量化防OOM ======================
+# ====================== 配置区 ======================
 M3U_URL = "https://gh-proxy.com/raw.githubusercontent.com/vbskycn/iptv/refs/heads/master/tv/iptv4.txt"
 SAVE_FILE = "daily.txt"
 TIMEOUT = 3.0
 FFMPEG_TIMEOUT = 4
 FFPROBE_RETRY = 1
 MAX_WORKERS_HTTP = 8
-MAX_WORKERS_FF = 2
+# ffprobe单线程运行，杜绝多进程内存溢出
+MAX_WORKERS_FF = 1
+# 720P标准：垂直分辨率≥720
 MIN_HEIGHT = 720
 
 HEADERS = {
@@ -42,6 +44,7 @@ def check_ffmpeg_exists():
 
 
 def get_stream_resolution(url: str):
+    """单链接获取分辨率，失败自动重试"""
     for _ in range(FFPROBE_RETRY + 1):
         cmd = [
             "ffprobe",
@@ -148,6 +151,7 @@ def get_m3u_source():
 
 
 def test_single_url(item):
+    """连通性测试，只读取4KB分片，减少慢流误删"""
     name, url = item
     start = time.time()
     try:
@@ -172,7 +176,8 @@ def test_single_url(item):
 
 
 def multi_thread_http_test(source_list):
-    print("【步骤2】HTTP连通测速")
+    """第一步：全量连通测速，筛选所有能打开的链接"""
+    print("【步骤2】多线程HTTP连通测速，筛选可用链接")
     valid = []
     total = len(source_list)
     if total == 0:
@@ -187,21 +192,24 @@ def multi_thread_http_test(source_list):
             ret = fu.result()
             if ret:
                 valid.append(ret)
-    # 修复语法错误：lambda x: x[2]
+    # 按速度升序，快链接放前面
     valid.sort(key=lambda x: x[2])
-    print(f"测速可用链接：{len(valid)}")
+    print(f"连通测速完成，可访问链接总数：{len(valid)}")
+    # 只保留频道名+url，丢弃耗时
     return [(n, u) for n, u, _ in valid]
 
 
 def filter_by_resolution(valid_links):
-    print(f"【步骤3】分辨率检测（并发{MAX_WORKERS_FF}）总量{len(valid_links)}")
+    """第二步：仅对连通成功的链接做分辨率检测（单线程，防OOM）"""
+    print(f"【步骤3】对连通链接进行分辨率检测，总量{len(valid_links)}")
     qualified = []
     if not check_ffmpeg_exists():
         raise SystemExit(1)
 
     def ff_task(item):
         name, url = item
-        time.sleep(0.4)
+        # 每条探测间隔，平滑带宽
+        time.sleep(0.5)
         res = get_stream_resolution(url)
         if res is None:
             return None
@@ -210,23 +218,24 @@ def filter_by_resolution(valid_links):
             return (name, url)
         return None
 
+    # 单线程串行执行，不会爆内存
     with ThreadPoolExecutor(max_workers=MAX_WORKERS_FF) as executor:
         tasks = [executor.submit(ff_task, i) for i in valid_links]
         idx = 0
         for fu in as_completed(tasks):
             idx += 1
-            if idx % 15 == 0:
-                print(f"分辨率检测 {idx}/{len(valid_links)}")
+            if idx % 10 == 0:
+                print(f"分辨率检测进度 {idx}/{len(valid_links)}")
             ret = fu.result()
             if ret:
                 qualified.append(ret)
-    print(f"≥720P有效源：{len(qualified)}")
+    print(f"分辨率检测完成，≥720P高清源：{len(qualified)}")
     return qualified
 
 
 def merge_and_deduplicate(old_list, new_list):
+    """合并旧源优先，不覆盖原有优质频道名"""
     unique_map = {}
-    # 旧源优先
     for n, u in old_list:
         if u not in unique_map:
             unique_map[u] = n
@@ -234,7 +243,7 @@ def merge_and_deduplicate(old_list, new_list):
         if u not in unique_map:
             unique_map[u] = n
     merged = [(v, k) for k, v in unique_map.items()]
-    print(f"合并去重总数：{len(merged)}")
+    print(f"新旧合并去重后总频道：{len(merged)}")
     return merged
 
 
@@ -262,6 +271,7 @@ def classify_source(valid_list):
         if any(k in IPTVSort.HK_KEYWORDS for k in name):
             hk_list.append((name, url))
             continue
+        # 未分类全部归入卫视兜底
         tv_list.append((name, url))
 
     def sort_key(x):
@@ -293,23 +303,29 @@ def generate_output_txt(cctv, movie, hk, tv):
 
 def main():
     total_start = time.time()
+    # 1 读取本地存量频道
     old = load_old_daily()
+    # 2 拉取线上最新源
     new = get_m3u_source()
     if not old and not new:
-        print("无任何源，退出")
+        print("无任何播放源，程序退出")
         raise SystemExit(1)
+    # 3 新旧合并去重
     merged = merge_and_deduplicate(old, new)
-    reach = multi_thread_http_test(merged)
-    if not reach:
-        print("无连通源，退出")
+    # 【第一阶段 全量连通测试，找出所有能打开的链接】
+    reachable_links = multi_thread_http_test(merged)
+    if not reachable_links:
+        print("没有任何可连通链接，终止运行")
         raise SystemExit(1)
-    hd_list = filter_by_resolution(reach)
-    if not hd_list:
-        print("无高清源，退出")
+    # 【第二阶段 仅对连通成功的链接做分辨率筛选】
+    hd_links = filter_by_resolution(reachable_links)
+    if not hd_links:
+        print("未找到720P及以上高清频道，终止运行")
         raise SystemExit(1)
-    c, m, h, t = classify_source(hd_list)
+    # 频道分类输出
+    c, m, h, t = classify_source(hd_links)
     generate_output_txt(c, m, h, t)
-    print(f"全部完成，总耗时 {round(time.time() - total_start, 2)}s")
+    print(f"\n全部任务完成，总耗时 {round(time.time() - total_start, 2)} 秒")
 
 
 if __name__ == "__main__":
