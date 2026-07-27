@@ -8,6 +8,7 @@ on:
 jobs:
   update_iptv:
     runs-on: ubuntu-latest
+    timeout-minutes: 12
     steps:
       - name: 全局Git配置
         run: |
@@ -29,7 +30,6 @@ jobs:
           git checkout master -- daily.txt || echo "无历史daily.txt，全新初始化"
           ls -la daily.txt
 
-      # 新增：安装ffmpeg用于分辨率检测
       - name: Install ffmpeg & Python dependencies
         run: |
           sudo apt update && sudo apt install -y ffmpeg
