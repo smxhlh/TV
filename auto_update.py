@@ -12,18 +12,15 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 warnings.filterwarnings("ignore")
 
 # ====================== 配置区 ======================
-# ghproxy加速地址，适配Github Actions国外服务器访问
+# ghproxy加速地址
 M3U_URL = "https://gh-proxy.com/raw.githubusercontent.com/vbskycn/iptv/refs/heads/master/tv/iptv4.txt"
 SAVE_FILE = "daily.txt"
-TIMEOUT = 2.0
-# ffprobe探测超时(秒)
-FFMPEG_TIMEOUT = 3
-# HTTP测速并发
+TIMEOUT = 3.0  # HTTP探测放宽到3秒，减少慢源误删
+FFMPEG_TIMEOUT = 4  # ffprobe超时延长，慢高清源不直接丢弃
+FFPROBE_RETRY = 2  # ffprobe失败重试2次
 MAX_WORKERS_HTTP = 12
-# FFmpeg分辨率检测并发（不要太高，防止限流）
-MAX_WORKERS_FF = 6
-# 最低分辨率阈值 720P (1280×720)
-MIN_WIDTH = 1280
+MAX_WORKERS_FF = 4  # 降低ff并发，防止服务器限流误判失效
+# 720P修正规则：垂直分辨率≥720即合格（兼容竖屏720、1080×720等）
 MIN_HEIGHT = 720
 
 HEADERS = {
@@ -34,14 +31,14 @@ DATA_BRANCH = "master"
 # ====================================================
 
 class IPTVSort:
-    CCTV_PATTERN = re.compile(r"CCTV\-?(\d{1,2})\+?", re.IGNORECASE)
-    MOVIE_KEYWORDS = {"电影", "影院"}
-    HK_KEYWORDS = {"凤凰"}
-    TV_KEYWORDS = {"卫视"}
+    # CCTV正则放宽，兼容CCTV-5、CCTV5+、CCTV 1等各种写法
+    CCTV_PATTERN = re.compile(r"CCTV[\s\-]?(\d{1,2})\+?", re.IGNORECASE)
+    MOVIE_KEYWORDS = {"电影", "影院", "影视", "高清", "CHC"}
+    HK_KEYWORDS = {"凤凰", "香港", "卫视"}
+    TV_KEYWORDS = {"卫视", "电视台", "卫视HD", "HD卫视"}
 
 
 def check_ffmpeg_exists():
-    """检测环境是否有ffmpeg"""
     try:
         subprocess.run(["ffmpeg", "-version"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
         return True
@@ -51,38 +48,40 @@ def check_ffmpeg_exists():
 
 
 def get_stream_resolution(url: str):
-    """
-    使用ffprobe获取视频流分辨率
-    返回 (width, height)，失败返回 None
-    """
-    cmd = [
-        "ffprobe",
-        "-v", "error",
-        "-print_format", "json",
-        "-show_streams",
-        "-timeout", str(FFMPEG_TIMEOUT * 1000000),
-        url
-    ]
-    try:
-        result = subprocess.run(
-            cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            timeout=FFMPEG_TIMEOUT
-        )
-        if result.returncode != 0:
+    """优化：失败自动重试，解决慢高清源误删"""
+    for _ in range(FFPROBE_RETRY + 1):
+        cmd = [
+            "ffprobe",
+            "-v", "error",
+            "-print_format", "json",
+            "-show_streams",
+            "-timeout", str(FFMPEG_TIMEOUT * 1000000),
+            url
+        ]
+        try:
+            result = subprocess.run(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                timeout=FFMPEG_TIMEOUT
+            )
+            if result.returncode != 0:
+                time.sleep(0.2)
+                continue
+            data = json.loads(result.stdout)
+            for stream in data.get("streams", []):
+                if stream.get("codec_type") == "video":
+                    w = stream.get("width")
+                    h = stream.get("height")
+                    if w and h:
+                        return (int(w), int(h))
+            # 有流但无视频，直接返回None
             return None
-        data = json.loads(result.stdout)
-        for stream in data.get("streams", []):
-            if stream.get("codec_type") == "video":
-                w = stream.get("width")
-                h = stream.get("height")
-                if w and h:
-                    return (int(w), int(h))
-        return None
-    except Exception:
-        return None
+        except Exception:
+            time.sleep(0.2)
+            continue
+    return None
 
 
 def load_old_daily() -> list[tuple[str, str]]:
@@ -129,7 +128,6 @@ def get_m3u_source():
         return []
     source_list = []
     lines = content.splitlines()
-    # 自动兼容 m3u8 / txt逗号分隔两种格式
     is_m3u = any(line.startswith("#EXTINF") for line in lines[:50])
     if is_m3u:
         temp_name = ""
@@ -140,11 +138,10 @@ def get_m3u_source():
                     temp_name = line.split(",")[-1].strip()
             elif line and not line.startswith("#"):
                 url = line
-                if temp_name and url and url.startswith(("http://", "https://")):
+                if temp_name and url.startswith(("http://", "https://")):
                     source_list.append((temp_name, url))
                 temp_name = ""
     else:
-        # txt分类源解析
         for line in lines:
             line = line.strip()
             if not line or "#genre#" in line:
@@ -160,7 +157,7 @@ def get_m3u_source():
 
 
 def test_single_url(item):
-    """直播源大多拦截HEAD请求，改用GET分片探测连通性"""
+    """优化：多读分片，减少开头无数据高清源误删"""
     name, url = item
     start = time.time()
     try:
@@ -172,8 +169,12 @@ def test_single_url(item):
             verify=False,
             stream=True
         )
-        # 只读取少量数据，不完整下载
-        next(res.iter_content(chunk_size=1024), None)
+        # 读取4KB分片，兼容开头空白流
+        data = b""
+        for chunk in res.iter_content(chunk_size=1024):
+            data += chunk
+            if len(data) >= 4096:
+                break
         cost_ms = round((time.time() - start) * 1000, 2)
         res.close()
         return (name, url, cost_ms)
@@ -198,13 +199,17 @@ def multi_thread_http_test(source_list):
             data = task.result()
             if data:
                 valid_result.append(data)
+    # 速度升序，快的放前面
     valid_result.sort(key=lambda x: x[2])
     print(f"【步骤2完成】连通可用链接：{len(valid_result)}")
     return [(name, url) for name, url, _ in valid_result]
 
 
 def filter_by_resolution(valid_links):
-    """【多线程FFmpeg分辨率检测，解决串行卡死】只保留 ≥720P"""
+    """
+    核心优化：只判断高度≥720，不再卡死宽度，竖屏720高清不丢失
+    增加ffprobe重试，慢源不直接丢弃
+    """
     print(f"【步骤3】开始FFmpeg分辨率检测，总量{len(valid_links)}……")
     qualified = []
     ffmpeg_ok = check_ffmpeg_exists()
@@ -214,11 +219,14 @@ def filter_by_resolution(valid_links):
 
     def ff_task(item):
         name, url = item
+        # 轻微间隔防限流
+        time.sleep(random.uniform(0.05, 0.15))
         res = get_stream_resolution(url)
         if res is None:
             return None
         w, h = res
-        if w >= MIN_WIDTH and h >= MIN_HEIGHT:
+        # 修复：垂直分辨率达标即为720P，不再限制宽度1280
+        if h >= MIN_HEIGHT:
             return (name, url)
         return None
 
@@ -237,9 +245,14 @@ def filter_by_resolution(valid_links):
 
 
 def merge_and_deduplicate(old_list, new_list):
-    all_items = old_list + new_list
+    """优化：存量旧源优先保留，新同url不覆盖旧频道名，防止优质旧源被替换"""
     unique_map = {}
-    for name, url in all_items:
+    # 先存入旧数据（优先保留）
+    for name, url in old_list:
+        if url not in unique_map:
+            unique_map[url] = name
+    # 新源只补充不存在的链接，不覆盖旧源名称
+    for name, url in new_list:
         if url not in unique_map:
             unique_map[url] = name
     merged = [(name, url) for url, name in unique_map.items()]
@@ -274,9 +287,11 @@ def classify_source(valid_list):
         if any(k in name for k in IPTVSort.HK_KEYWORDS):
             hk_list.append((name, url))
             continue
-        if any(k in name for k in IPTVSort.TV_KEYWORDS):
+        if any(k in IPTVSort.TV_KEYWORDS for k in name):
             tv_list.append((name, url))
-            continue
+        # 无匹配不丢弃，全部归入卫视分类兜底，避免丢失高清频道
+        else:
+            tv_list.append((name, url))
 
     def sort_key(item):
         n = item[0].replace("CCTV", "").replace("+", "")
@@ -302,7 +317,7 @@ def generate_output_txt(cctv, movie, hk, tv):
         for ch_name, ch_url in hk:
             lines.append(f"{ch_name},{ch_url}")
         lines.append("")
-        lines.append("卫视频道,#genre#")
+        lines.append("卫视频道,#兜底所有未分类高清源,#genre#")
         for ch_name, ch_url in tv:
             lines.append(f"{ch_name},{ch_url}")
         with open(SAVE_FILE, "w", encoding="utf-8") as f:
@@ -315,29 +330,22 @@ def generate_output_txt(cctv, movie, hk, tv):
 
 def main():
     start_time = time.time()
-    # 1. 读取旧源
     old_data = load_old_daily()
-    # 2. 拉取新源
     new_data = get_m3u_source()
     if not old_data and not new_data:
         print("无任何新旧播放源，程序退出")
         raise SystemExit(1)
-    # 3. 合并去重
     merged_all = merge_and_deduplicate(old_data, new_data)
-    # 4. HTTP连通测速
     reachable = multi_thread_http_test(merged_all)
     if not reachable:
         print("无任何可连通播放源，终止")
         raise SystemExit(1)
-    # 5. 多线程FFmpeg分辨率过滤
     hd_sources = filter_by_resolution(reachable)
     if not hd_sources:
         print("无分辨率≥720P有效频道，终止")
         raise SystemExit(1)
-    # 6. 频道分类
     cctv_data, movie_data, hk_data, tv_data = classify_source(hd_sources)
-    # 7. 写出txt
-    generate_output_txt(cctv_data, movie_data, hk_data, tv_data)
+    generate_output_txt(cctv_data, movie_data, hk_data)
 
     cost = round(time.time() - start_time, 2)
     print(f"\n===== 全部任务执行完毕，总耗时：{cost} 秒 =====")
