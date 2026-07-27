@@ -11,7 +11,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 warnings.filterwarnings("ignore")
 
 # ====================== 配置区 ======================
-M3U_URL = "https://live.zbds.top/tv/iptv4.txt"
+M3U_URL = "https://gh-proxy.com/raw.githubusercontent.com/vbskycn/iptv/refs/heads/master/tv/iptv4.txt"
 SAVE_FILE = "daily.txt"
 TIMEOUT = 2.0
 # ffmpeg探测超时(秒)
@@ -104,39 +104,54 @@ def load_old_daily() -> list[tuple[str, str]]:
     print(f"读取存量频道总数：{len(old_list)}")
     return old_list
 
-
 def get_m3u_source():
-    print("【步骤1】开始下载M3U源文件...")
+    print("【步骤1】开始下载M3U/TXT源文件...")
     retry = 3
     content = ""
     while retry > 0:
         try:
-            resp = requests.get(M3U_URL, headers=HEADERS, timeout=10, verify=False)
+            resp = requests.get(M3U_URL, headers=HEADERS, timeout=15, verify=False)
             resp.encoding = "utf-8"
             content = resp.text
             break
         except Exception as e:
             retry -= 1
-            print(f"下载M3U失败，剩余重试{retry}次：{str(e)}")
+            print(f"下载源失败，剩余重试{retry}次：{str(e)}")
             time.sleep(1)
     if not content:
-        print("多次重试下载M3U源失败，无新源数据")
+        print("多次重试下载源失败，无新源数据")
         return []
     source_list = []
-    temp_name = ""
-    for line in content.splitlines():
-        line = line.strip()
-        if line.startswith("#EXTINF"):
+    # 双模式兼容：m3u8格式 / 逗号分割txt格式
+    lines = content.splitlines()
+    is_m3u = any(line.startswith("#EXTINF") for line in lines[:50])
+    if is_m3u:
+        # 原有m3u解析逻辑
+        temp_name = ""
+        for line in lines:
+            line = line.strip()
+            if line.startswith("#EXTINF"):
+                if "," in line:
+                    temp_name = line.split(",")[-1].strip()
+            elif line and not line.startswith("#"):
+                url = line
+                if temp_name and url and url.startswith(("http://", "https://")):
+                    source_list.append((temp_name, url))
+                temp_name = ""
+    else:
+        # 新增：解析逗号分割txt（适配ghproxy拉取的iptv4.txt）
+        for line in lines:
+            line = line.strip()
+            if not line or "#genre#" in line:
+                continue
             if "," in line:
-                temp_name = line.split(",")[-1].strip()
-        elif line and not line.startswith("#"):
-            url = line
-            if temp_name and url and url.startswith(("http://", "https://")):
-                source_list.append((temp_name, url))
-            temp_name = ""
+                name, url = line.split(",", 1)
+                name = name.strip()
+                url = url.strip()
+                if url.startswith(("http://", "https://")):
+                    source_list.append((name, url))
     print(f"【步骤1完成】解析新源有效HTTP链接总数：{len(source_list)}")
     return source_list
-
 
 def test_single_url(item):
     """基础连通测速，不通直接丢弃"""
