@@ -8,45 +8,49 @@ on:
 jobs:
   update_iptv:
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 18
+    concurrency:
+      group: iptv-update
+      cancel-in-progress: false
     steps:
-      - name: 全局Git配置
+      - name: Git配置
         run: |
           git config --global core.quotepath false
           git config --global user.name "GitHub Actions Bot"
           git config --global user.email "actions@github.com"
           git config --global init.defaultBranch main
 
-      - name: Checkout main branch (code)
+      - name: Checkout main
         uses: actions/checkout@v5
         with:
           ref: main
           fetch-depth: 0
-          persist-credentials: true
 
-      - name: Fetch master branch data file
+      - name: 拉取master存量文件
         run: |
-          git fetch origin master:master
-          git checkout master -- daily.txt || echo "无历史daily.txt，全新初始化"
-          ls -la daily.txt
+          git fetch origin master
+          git checkout master -- daily.txt || true
 
-      - name: Install ffmpeg & Python dependencies
+      - name: 安装依赖&ffmpeg
         run: |
-          sudo apt update && sudo apt install -y ffmpeg
+          sudo apt update -y
+          sudo apt install -y ffmpeg
           python3 -m pip install --upgrade requests
 
-      - name: Run auto update script
-        run: python3 auto_update.py
+      - name: 执行更新脚本
+        run: |
+          echo "===== 开始运行脚本 ====="
+          python3 auto_update.py
+          echo "===== 脚本执行结束 ====="
 
-      - name: Commit & Push to master branch
+      - name: 提交推送更新
         run: |
           git checkout master
           if [ -f "daily.txt" ]; then
             git add daily.txt
-            git status
-            git commit -m "Auto update IPTV source $(date '+%Y-%m-%d %H:%M')"
+            git commit -m "Auto update $(date '+%Y-%m-%d %H:%M')"
             git push origin master
           else
-            echo "未生成有效daily.txt，任务异常退出"
+            echo "未生成有效频道文件"
             exit 1
           fi
