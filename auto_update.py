@@ -15,9 +15,9 @@ M3U_URL = "https://gh-proxy.com/raw.githubusercontent.com/vbskycn/iptv/refs/head
 SAVE_FILE = "daily.txt"
 TIMEOUT = 3.0
 FFMPEG_TIMEOUT = 4
-FFPROBE_RETRY = 1   # 减少重试，降低资源消耗
-MAX_WORKERS_HTTP = 8  # 减少http并发
-MAX_WORKERS_FF = 2    # 关键：ffprobe最多2线程，防止内存爆炸
+FFPROBE_RETRY = 1
+MAX_WORKERS_HTTP = 8
+MAX_WORKERS_FF = 2
 MIN_HEIGHT = 720
 
 HEADERS = {
@@ -130,7 +130,7 @@ def get_m3u_source():
             elif line and not line.startswith("#"):
                 url = line
                 if temp_name and url.startswith(("http://", "https://")):
-                    source.append((temp_name, url))
+                    source_list.append((temp_name, url))
                     temp_name = ""
     else:
         for line in lines:
@@ -164,7 +164,7 @@ def test_single_url(item):
             data += chunk
             if len(data) >= 4096:
                 break
-        cost_ms = round((time.time() * 1000 - start * 1000), 2)
+        cost_ms = round((time.time() - start) * 1000, 2)
         res.close()
         return (name, url, cost_ms)
     except Exception:
@@ -187,7 +187,8 @@ def multi_thread_http_test(source_list):
             ret = fu.result()
             if ret:
                 valid.append(ret)
-    valid.sort(key=lambda x[2])
+    # 修复语法错误：lambda x: x[2]
+    valid.sort(key=lambda x: x[2])
     print(f"测速可用链接：{len(valid)}")
     return [(n, u) for n, u, _ in valid]
 
@@ -200,7 +201,6 @@ def filter_by_resolution(valid_links):
 
     def ff_task(item):
         name, url = item
-        # 强制间隔，避免并发打满带宽
         time.sleep(0.4)
         res = get_stream_resolution(url)
         if res is None:
@@ -226,14 +226,14 @@ def filter_by_resolution(valid_links):
 
 def merge_and_deduplicate(old_list, new_list):
     unique_map = {}
-    # 旧源优先保留
+    # 旧源优先
     for n, u in old_list:
         if u not in unique_map:
             unique_map[u] = n
     for n, u in new_list:
         if u not in unique_map:
             unique_map[u] = n
-    merged = [(k, v) for v, k in unique_map.items()]
+    merged = [(v, k) for k, v in unique_map.items()]
     print(f"合并去重总数：{len(merged)}")
     return merged
 
