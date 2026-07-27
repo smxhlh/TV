@@ -5,19 +5,24 @@ import os
 import warnings
 import subprocess
 import json
+import random
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # 关闭ssl警告
 warnings.filterwarnings("ignore")
 
 # ====================== 配置区 ======================
+# ghproxy加速地址，适配Github Actions国外服务器访问
 M3U_URL = "https://gh-proxy.com/raw.githubusercontent.com/vbskycn/iptv/refs/heads/master/tv/iptv4.txt"
 SAVE_FILE = "daily.txt"
 TIMEOUT = 2.0
-# ffmpeg探测超时(秒)
-FFMPEG_TIMEOUT = 4
-MAX_WORKERS = 12
-# 最低分辨率阈值 1280×720
+# ffprobe探测超时(秒)
+FFMPEG_TIMEOUT = 3
+# HTTP测速并发
+MAX_WORKERS_HTTP = 12
+# FFmpeg分辨率检测并发（不要太高，防止限流）
+MAX_WORKERS_FF = 6
+# 最低分辨率阈值 720P (1280×720)
 MIN_WIDTH = 1280
 MIN_HEIGHT = 720
 
@@ -104,6 +109,7 @@ def load_old_daily() -> list[tuple[str, str]]:
     print(f"读取存量频道总数：{len(old_list)}")
     return old_list
 
+
 def get_m3u_source():
     print("【步骤1】开始下载M3U/TXT源文件...")
     retry = 3
@@ -122,11 +128,10 @@ def get_m3u_source():
         print("多次重试下载源失败，无新源数据")
         return []
     source_list = []
-    # 双模式兼容：m3u8格式 / 逗号分割txt格式
     lines = content.splitlines()
+    # 自动兼容 m3u8 / txt逗号分隔两种格式
     is_m3u = any(line.startswith("#EXTINF") for line in lines[:50])
     if is_m3u:
-        # 原有m3u解析逻辑
         temp_name = ""
         for line in lines:
             line = line.strip()
@@ -139,7 +144,7 @@ def get_m3u_source():
                     source_list.append((temp_name, url))
                 temp_name = ""
     else:
-        # 新增：解析逗号分割txt（适配ghproxy拉取的iptv4.txt）
+        # txt分类源解析
         for line in lines:
             line = line.strip()
             if not line or "#genre#" in line:
@@ -153,27 +158,30 @@ def get_m3u_source():
     print(f"【步骤1完成】解析新源有效HTTP链接总数：{len(source_list)}")
     return source_list
 
+
 def test_single_url(item):
-    """基础连通测速，不通直接丢弃"""
+    """直播源大多拦截HEAD请求，改用GET分片探测连通性"""
     name, url = item
     start = time.time()
     try:
-        res = requests.head(
+        res = requests.get(
             url,
             timeout=TIMEOUT,
             headers=HEADERS,
             allow_redirects=True,
-            verify=False
+            verify=False,
+            stream=True
         )
+        # 只读取少量数据，不完整下载
+        next(res.iter_content(chunk_size=1024), None)
         cost_ms = round((time.time() - start) * 1000, 2)
-        if 200 <= res.status_code < 300:
-            return (name, url, cost_ms)
+        res.close()
+        return (name, url, cost_ms)
     except Exception:
-        pass
-    return None
+        return None
 
 
-def multi_thread_test(source_list):
+def multi_thread_http_test(source_list):
     valid_result = []
     print("【步骤2】多线程连通测速，剔除无法访问链接……")
     total = len(source_list)
@@ -181,7 +189,7 @@ def multi_thread_test(source_list):
     if total == 0:
         print("无待测速链接")
         return []
-    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+    with ThreadPoolExecutor(max_workers=MAX_WORKERS_HTTP) as executor:
         task_dict = {executor.submit(test_single_url, item): item for item in source_list}
         for task in as_completed(task_dict):
             finished_count += 1
@@ -196,32 +204,34 @@ def multi_thread_test(source_list):
 
 
 def filter_by_resolution(valid_links):
-    """
-    FFmpeg分辨率过滤：只保留 ≥720P 视频流
-    valid_links: [(name, url)]
-    return: 符合清晰度的列表
-    """
+    """【多线程FFmpeg分辨率检测，解决串行卡死】只保留 ≥720P"""
     print(f"【步骤3】开始FFmpeg分辨率检测，总量{len(valid_links)}……")
     qualified = []
-    total = len(valid_links)
-    cnt = 0
     ffmpeg_ok = check_ffmpeg_exists()
     if not ffmpeg_ok:
         print("ffmpeg不可用，终止程序")
         raise SystemExit(1)
 
-    for name, url in valid_links:
-        cnt += 1
-        if cnt % 50 == 0:
-            print(f"分辨率检测进度 {cnt}/{total}")
+    def ff_task(item):
+        name, url = item
         res = get_stream_resolution(url)
         if res is None:
-            # 无法获取流信息，丢弃
-            continue
+            return None
         w, h = res
-        # 宽高任一达标即判定720P（兼容16:9/4:3）
         if w >= MIN_WIDTH and h >= MIN_HEIGHT:
-            qualified.append((name, url))
+            return (name, url)
+        return None
+
+    with ThreadPoolExecutor(max_workers=MAX_WORKERS_FF) as executor:
+        futures = [executor.submit(ff_task, item) for item in valid_links]
+        finished = 0
+        for fu in as_completed(futures):
+            finished += 1
+            if finished % 20 == 0:
+                print(f"分辨率检测进度 {finished}/{len(valid_links)}")
+            result = fu.result()
+            if result:
+                qualified.append(result)
     print(f"【步骤3完成】分辨率≥720P有效源：{len(qualified)}")
     return qualified
 
@@ -307,19 +317,19 @@ def main():
     start_time = time.time()
     # 1. 读取旧源
     old_data = load_old_daily()
-    # 2. 拉取新M3U
+    # 2. 拉取新源
     new_data = get_m3u_source()
     if not old_data and not new_data:
         print("无任何新旧播放源，程序退出")
         raise SystemExit(1)
     # 3. 合并去重
     merged_all = merge_and_deduplicate(old_data, new_data)
-    # 4. 连通测速，丢弃打不开链接
-    reachable = multi_thread_test(merged_all)
+    # 4. HTTP连通测速
+    reachable = multi_thread_http_test(merged_all)
     if not reachable:
         print("无任何可连通播放源，终止")
         raise SystemExit(1)
-    # 5. FFmpeg过滤分辨率，低于720P全部丢弃
+    # 5. 多线程FFmpeg分辨率过滤
     hd_sources = filter_by_resolution(reachable)
     if not hd_sources:
         print("无分辨率≥720P有效频道，终止")
