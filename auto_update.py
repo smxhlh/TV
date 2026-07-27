@@ -9,7 +9,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 warnings.filterwarnings("ignore")
 
 # ====================== 配置区 ======================
-M3U_URL = "https://iptv-org.github.io/iptv/index.m3u"
+M3U_URL = "https://live.zbds.top/tv/iptv4.txt"
 SAVE_FILE = "daily.txt"
 TIMEOUT = 2.0
 MAX_WORKERS = 22
