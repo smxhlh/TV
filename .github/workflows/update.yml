@@ -1,12 +1,10 @@
 name: IPTV公开源
 env:
-  # 强制Actions使用Node24，消除废弃警告
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 on:
   schedule:
-    # UTC 10点 = 北京时间18点；原UTC18=次日凌晨2点
     - cron: '0 10 * * *'
-  workflow_dispatch: # 支持手动触发
+  workflow_dispatch:
 jobs:
   update_iptv:
     runs-on: ubuntu-latest
@@ -17,37 +15,38 @@ jobs:
           git config --global user.name "GitHub Actions Bot"
           git config --global user.email "actions@github.com"
           git config --global init.defaultBranch main
-      # 升级checkout到v5，原生支持Node24，消除警告
+
       - name: Checkout main branch (code)
         uses: actions/checkout@v5
         with:
           ref: main
           fetch-depth: 0
           persist-credentials: true
-      # 拉取master分支历史，避免文件覆盖冲突
+
       - name: Fetch master branch data file
         run: |
           git fetch origin master:master
           git checkout master -- daily.txt || echo "无历史daily.txt，全新初始化"
           ls -la daily.txt
-      # 安装Python依赖
-      - name: Install Python dependencies
+
+      # 新增：安装ffmpeg用于分辨率检测
+      - name: Install ffmpeg & Python dependencies
         run: |
+          sudo apt update && sudo apt install -y ffmpeg
           python3 -m pip install --upgrade requests
-      # 运行脚本并捕获错误，打印完整日志
+
       - name: Run auto update script
         run: python3 auto_update.py
-      # 切换数据分支提交推送
+
       - name: Commit & Push to master branch
         run: |
           git checkout master
-          # 确保文件存在
           if [ -f "daily.txt" ]; then
             git add daily.txt
             git status
             git commit -m "Auto update IPTV source $(date '+%Y-%m-%d %H:%M')"
             git push origin master
           else
-            echo "未生成daily.txt，跳过提交"
+            echo "未生成有效daily.txt，任务异常退出"
             exit 1
           fi
