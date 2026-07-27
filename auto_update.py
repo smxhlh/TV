@@ -4,15 +4,14 @@ import time
 import os
 import warnings
 from concurrent.futures import ThreadPoolExecutor, as_completed
-
 # 关闭ssl警告
 warnings.filterwarnings("ignore")
-
 # ====================== 配置区 ======================
 M3U_URL = "https://live.zbds.top/tv/iptv4.txt"
 SAVE_FILE = "daily.txt"
 TIMEOUT = 2.0
-MAX_WORKERS = 22
+# 降低并发，适配Github Actions服务器限流
+MAX_WORKERS = 12
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 }
@@ -20,7 +19,6 @@ HEADERS = {
 CODE_BRANCH = "main"
 DATA_BRANCH = "master"
 # ====================================================
-
 class IPTVSort:
     CCTV_PATTERN = re.compile(r"CCTV\-?(\d{1,2})\+?", re.IGNORECASE)
     MOVIE_KEYWORDS = {"电影", "影院"}
@@ -33,8 +31,12 @@ def load_old_daily() -> list[tuple[str, str]]:
     if not os.path.exists(SAVE_FILE):
         print("未找到旧版daily.txt，无存量数据")
         return old_list
-    with open(SAVE_FILE, "r", encoding="utf-8") as f:
-        lines = f.readlines()
+    try:
+        with open(SAVE_FILE, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+    except Exception as e:
+        print(f"读取旧文件失败: {str(e)}")
+        return old_list
     for line in lines:
         line = line.strip()
         if not line or "#genre#" in line:
@@ -50,12 +52,21 @@ def load_old_daily() -> list[tuple[str, str]]:
 
 def get_m3u_source():
     print("【步骤1】开始下载M3U源文件...")
-    try:
-        resp = requests.get(M3U_URL, headers=HEADERS, timeout=15, verify=False)
-        resp.encoding = "utf-8"
-        content = resp.text
-    except Exception as e:
-        print(f"下载M3U失败：{str(e)}")
+    # 增加重试机制
+    retry = 3
+    content = ""
+    while retry > 0:
+        try:
+            resp = requests.get(M3U_URL, headers=HEADERS, timeout=10, verify=False)
+            resp.encoding = "utf-8"
+            content = resp.text
+            break
+        except Exception as e:
+            retry -= 1
+            print(f"下载M3U失败，剩余重试{retry}次：{str(e)}")
+            time.sleep(1)
+    if not content:
+        print("多次重试下载M3U源失败，无新源数据")
         return []
     source_list = []
     temp_name = ""
@@ -93,9 +104,12 @@ def test_single_url(item):
 
 def multi_thread_test(source_list):
     valid_result = []
-    print("【步骤2】启动多线程统一测速（新旧合并全部链接）……")
+    print("【步骤2】启动多线程统一测速……")
     total = len(source_list)
     finished_count = 0
+    if total == 0:
+        print("无待测速链接")
+        return []
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
         task_dict = {executor.submit(test_single_url, item): item for item in source_list}
         for task in as_completed(task_dict):
@@ -128,7 +142,6 @@ def classify_source(valid_list):
     hk_list = []
     tv_list = []
     cctv_exist = set()
-
     for name, url in valid_list:
         match = IPTVSort.CCTV_PATTERN.search(name)
         if match:
@@ -153,7 +166,6 @@ def classify_source(valid_list):
         if any(k in name for k in IPTVSort.TV_KEYWORDS):
             tv_list.append((name, url))
             continue
-
     # CCTV数字排序
     def sort_key(item):
         n = item[0].replace("CCTV", "").replace("+", "")
@@ -162,28 +174,32 @@ def classify_source(valid_list):
     return cctv_list, movie_list, hk_list, tv_list
 
 def generate_output_txt(cctv, movie, hk, tv):
-    # 覆盖前先清空旧文件
-    if os.path.exists(SAVE_FILE):
-        os.remove(SAVE_FILE)
-    lines = []
-    lines.append("央视频道,#genre#")
-    for ch_name, ch_url in cctv:
-        lines.append(f"{ch_name},{ch_url}")
-    lines.append("")
-    lines.append("电影频道,#genre#")
-    for ch_name, ch_url in movie:
-        lines.append(f"{ch_name},{ch_url}")
-    lines.append("")
-    lines.append("香港频道,#genre#")
-    for ch_name, ch_url in hk:
-        lines.append(f"{ch_name},{ch_url}")
-    lines.append("")
-    lines.append("卫视频道,#genre#")
-    for ch_name, ch_url in tv:
-        lines.append(f"{ch_name},{ch_url}")
-    with open(SAVE_FILE, "w", encoding="utf-8") as f:
-        f.write("\n".join(lines))
-    print(f"【步骤3完成】文件 {SAVE_FILE} 生成成功！")
+    try:
+        # 覆盖前先清空旧文件
+        if os.path.exists(SAVE_FILE):
+            os.remove(SAVE_FILE)
+        lines = []
+        lines.append("央视频道,#genre#")
+        for ch_name, ch_url in cctv:
+            lines.append(f"{ch_name},{ch_url}")
+        lines.append("")
+        lines.append("电影频道,#genre#")
+        for ch_name, ch_url in movie:
+            lines.append(f"{ch_name},{ch_url}")
+        lines.append("")
+        lines.append("香港频道,#genre#")
+        for ch_name, ch_url in hk:
+            lines.append(f"{ch_name},{ch_url}")
+        lines.append("")
+        lines.append("卫视频道,#genre#")
+        for ch_name, ch_url in tv:
+            lines.append(f"{ch_name},{ch_url}")
+        with open(SAVE_FILE, "w", encoding="utf-8") as f:
+            f.write("\n".join(lines))
+        print(f"【步骤3完成】文件 {SAVE_FILE} 生成成功！")
+    except Exception as e:
+        print(f"生成文件失败: {str(e)}")
+        raise SystemExit(1)
 
 def main():
     start_time = time.time()
@@ -193,11 +209,14 @@ def main():
     new_data = get_m3u_source()
     if not old_data and not new_data:
         print("无任何新旧播放源，程序退出")
-        return
+        raise SystemExit(1)
     # 3. 合并去重
     merged_all = merge_and_deduplicate(old_data, new_data)
     # 4. 全部统一测速+按速度排序
     valid_sorted = multi_thread_test(merged_all)
+    if not valid_sorted:
+        print("测速后无有效可用源，终止执行")
+        raise SystemExit(1)
     # 5. 分类频道
     cctv_data, movie_data, hk_data, tv_data = classify_source(valid_sorted)
     # 6. 生成文件
