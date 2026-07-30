@@ -105,6 +105,45 @@ def parse_m3u(raw_text: str) -> List[ChannelItem]:
             extinf_cache = ""
     return items
 
+# 新增：解析逗号分隔txt直播源（名称,url）
+def parse_txt_source(raw_text: str) -> List[ChannelItem]:
+    items: List[ChannelItem] = []
+    lines = raw_text.splitlines()
+    for line in lines:
+        line = line.strip()
+        # 跳过空行、注释行
+        if not line or line.startswith("#"):
+            continue
+        # 必须包含逗号分割名称和链接
+        if "," not in line:
+            continue
+        name, url = line.split(",", maxsplit=1)
+        name = name.strip()
+        url = url.strip()
+        # 只保留http直播链接
+        if not url.startswith("http"):
+            continue
+        # 提取CCTV数字编号
+        digit_match = REGEX_CCTV_NUM.search(name)
+        digit = digit_match.group(1) if digit_match else None
+        items.append(ChannelItem(
+            extinf=f'#EXTINF:-1,{name}',
+            url=url,
+            name=name,
+            cctv_digit=digit
+        ))
+    return items
+
+# 新增：统一下载+自动判断是m3u还是txt源
+def download_and_parse(url: str) -> List[ChannelItem]:
+    raw_text = download_m3u(url)
+    if not raw_text:
+        return []
+    # 包含#EXTINF就是标准m3u，否则按txt逗号格式解析
+    if "#EXTINF" in raw_text:
+        return parse_m3u(raw_text)
+    else:
+        return parse_txt_source(raw_text)
 
 def check_stream_valid(url: str) -> Tuple[bool, Optional[int]]:
     cmd = [
@@ -186,10 +225,7 @@ def main():
     source_urls = load_sources()
     print(f"加载 {len(source_urls)} 个远程m3u源")
     for src in source_urls:
-        text = download_m3u(src)
-        if not text:
-            continue
-        channels = parse_m3u(text)
+        channels = download_and_parse(src)
         print(f"解析 {src} 获取 {len(channels)} 条频道")
         for ch in channels:
             if ch.url not in seen_urls:
