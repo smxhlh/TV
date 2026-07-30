@@ -379,7 +379,8 @@ def save_merge_file():
     # 央视排序
     content += "央视频道,#genre#\n"
     def cctv_sort_key(name):
-        num_part = re.search(r"\d+", name).group()
+        match = re.search(r"\d+", name)
+        num_part = match.group() if match else "999"
         has_plus = 1 if "+" in name else 0
         return int(num_part), has_plus
     sorted_cctv_names = sorted(final_cctv.keys(), key=cctv_sort_key)
