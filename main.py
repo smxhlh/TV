@@ -12,6 +12,7 @@ TIMEOUT_HTTP = 10
 FFMPEG_TIMEOUT = 12
 MIN_HEIGHT = 720
 MAX_WORKERS = 10
+CCTV_NUM_RANGE = list(range(1, 18))  # 1~17
 # 请求头模拟浏览器，解决PHP防盗链拦截
 REQUEST_HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -19,25 +20,23 @@ REQUEST_HEADERS = {
     "Accept-Language": "zh-CN,zh;q=0.9",
     "Connection": "keep-alive"
 }
-# CCTV固定模板【用于URL匹配识别 + 自动生成探测链接】
-# 格式：(url模板字符串, 名称前缀)
-CCTV_GENERATE_TEMPLATES = [
-    ("http://118.81.195.79:9003/hls/{n}/index.m3u8", "CCTV{n}"),
-    ("http://74.91.26.218:82/live/cctv{n}hd.m3u8", "CCTV{n}"),
-]
-CCTV_NUM_RANGE = list(range(1, 18))  # 1~17
-# URL正则匹配（解析识别CCTV链接）
+# URL正则匹配识别CCTV链接
 CCTV_URL_PATTERNS = [
     r"http://69\.30\.245\.50/live/cctv(\d{1,2})\.m3u8",
     r"http://74\.91\.26\.218:82/live/cctv(\d{1,2})hd\.m3u8",
-    r"http://218\.13\.170\.98:9901/tsfile/live/000(\d{1,2})_1\.m3u8",
-    r"http://112\.46\.85\.60:8009/hls/(\d{1,2})/index\.m3u8",
-    r"http://cssbyd\.imwork\.net:8082/hls/(\d{1,2})/index\.m3u8",
-    r"http://118\.81\.195\.79:9003/hls/(\d{1,2})/index\.m3u8", # 新增探测地址正则
+    r"tsfile/live/000(\d{1,2})_1\.m3u8",
+    r"/hls/(\d{1,2})/live\.m3u8",
+    r"/hls/(\d{1,2})/index\.m3u8",
+    r"http://118\.81\.195\.79:9003/hls/(\d{1,2})/index\.m3u8",
 ]
 CCTV_VALID_NUMBERS = set(str(i) for i in CCTV_NUM_RANGE)
 REGEX_CCTV_PREFIX = re.compile(r"CCTV-?")
 REGEX_CCTV_NUM = re.compile(r"CCTV-?(\d{1,2})")
+# 提取两类动态模板正则
+# 模板1：000数字_1.m3u8
+PATTERN_TSFILE_TPL = re.compile(r"(http://.+?/)000(\d{1,2})_1(\.m3u8\?.+)")
+# 模板2：/hls/数字/xxx.m3u8
+PATTERN_HLS_TPL = re.compile(r"(http://.+?/hls/)(\d{1,2})(/.+\.m3u8)")
 # 保留分组，无匹配直接丢弃
 GROUP_ORDER = [
     "央视频道,#genre#",
@@ -51,29 +50,11 @@ class ChannelItem:
     url: str
     name: str
     cctv_digit: Optional[str] = None
-def generate_cctv_probe_channels() -> List[ChannelItem]:
-    """自动生成两套规则CCTV1~17探测频道"""
-    probe_list = []
-    for url_tpl, name_tpl in CCTV_GENERATE_TEMPLATES:
-        for num in CCTV_NUM_RANGE:
-            url = url_tpl.format(n=num)
-            ch_name = name_tpl.format(n=num)
-            probe_list.append(
-                ChannelItem(
-                    extinf=f'#EXTINF:-1,{ch_name}',
-                    url=url,
-                    name=ch_name,
-                    cctv_digit=str(num)
-                )
-            )
-    print(f"✅ 自动生成探测频道数量：{len(probe_list)}")
-    return probe_list
 def load_sources() -> List[str]:
     with open(SOURCE_LIST_PATH, "r", encoding="utf-8") as f:
         lines = [i.strip() for i in f.readlines() if i.strip() and not i.startswith("#")]
     return lines
 def download_m3u(url: str) -> Optional[str]:
-    """修复：增加UA、允许重定向、自动处理编码、过滤HTML报错页面"""
     try:
         resp = requests.get(
             url,
@@ -82,7 +63,6 @@ def download_m3u(url: str) -> Optional[str]:
             allow_redirects=True
         )
         resp.raise_for_status()
-        # 过滤PHP返回HTML页面（不是M3U源）
         html_signatures = ["<html", "<!DOCTYPE html", "<head", "<body"]
         raw = resp.text
         lower_raw = raw.lower()
@@ -90,16 +70,13 @@ def download_m3u(url: str) -> Optional[str]:
             if sig in lower_raw:
                 print(f"[拦截HTML页面] {url} 返回网页而非直播源")
                 return None
-        # 统一UTF-8，清除BOM、首尾空白
         raw = raw.lstrip('\ufeff').strip()
         return raw
     except Exception as e:
         print(f"[下载失败] {url} : {str(e)}")
         return None
 def is_standard_m3u(text: str) -> bool:
-    """判断是否为M3U（兼容PHP动态输出，优先#EXTM3U，其次#EXTINF）"""
     text_clean = text.strip().lower()
-    # 标准M3U必须以#extm3u开头，其次包含#extinf
     return text_clean.startswith("#extm3u") or "#extinf" in text_clean
 def parse_m3u(raw_text: str) -> List[ChannelItem]:
     items: List[ChannelItem] = []
@@ -107,7 +84,6 @@ def parse_m3u(raw_text: str) -> List[ChannelItem]:
     extinf_cache = ""
     for line in lines:
         line = line.strip()
-        # 跳过#EXTM3U头部、空行、纯注释
         if not line or line.startswith("#extm3u") or (line.startswith("#") and not line.startswith("#EXTINF:")):
             continue
         if line.startswith("#EXTINF:"):
@@ -120,25 +96,20 @@ def parse_m3u(raw_text: str) -> List[ChannelItem]:
             items.append(ChannelItem(extinf=extinf_cache, url=line, name=name, cctv_digit=digit))
             extinf_cache = ""
     return items
-# 新增：解析逗号分隔txt直播源（名称,url）
 def parse_txt_source(raw_text: str) -> List[ChannelItem]:
     items: List[ChannelItem] = []
     lines = raw_text.splitlines()
     for line in lines:
         line = line.strip()
-        # 跳过空行、注释行
         if not line or line.startswith("#"):
             continue
-        # 必须包含逗号分割名称和链接
         if "," not in line:
             continue
         name, url = line.split(",", maxsplit=1)
         name = name.strip()
         url = url.strip()
-        # 只保留http直播链接
         if not url.startswith("http"):
             continue
-        # 提取CCTV数字编号
         digit_match = REGEX_CCTV_NUM.search(name)
         digit = digit_match.group(1) if digit_match else None
         items.append(ChannelItem(
@@ -148,16 +119,13 @@ def parse_txt_source(raw_text: str) -> List[ChannelItem]:
             cctv_digit=digit
         ))
     return items
-# 修复：统一下载+智能区分PHP动态M3U/普通txt
 def download_and_parse(url: str) -> List[ChannelItem]:
     raw_text = download_m3u(url)
     if not raw_text:
         return []
-    # 优先判断标准M3U（含#EXTM3U/#EXTINF），PHP动态m3u走这里
     if is_standard_m3u(raw_text):
         return parse_m3u(raw_text)
     else:
-        # 仅无M3U标记时才按逗号txt解析
         return parse_txt_source(raw_text)
 def check_stream_valid(url: str) -> Tuple[bool, Optional[int]]:
     cmd = [
@@ -198,7 +166,7 @@ def classify_channel(item: ChannelItem) -> Optional[str]:
     url = item.url
     match_cctv_url = False
     for pattern in CCTV_URL_PATTERNS:
-        if re.match(pattern, url):
+        if re.search(pattern, url):
             match_cctv_url = True
             break
     if match_cctv_url and REGEX_CCTV_PREFIX.search(name):
@@ -220,57 +188,117 @@ def sort_cctv_group(items: List[ChannelItem]) -> List[ChannelItem]:
             non_digit_channels.append(ch)
     digit_channels.sort(key=lambda x: int(x.cctv_digit))
     return digit_channels + non_digit_channels
-def main():
-    all_channels: List[ChannelItem] = []
-    seen_urls: Set[str] = set()
-    # 步骤1：加载远程m3u源（含PHP动态m3u）
-    source_urls = load_sources()
-    print(f"加载 {len(source_urls)} 个远程源地址")
-    for src in source_urls:
-        channels = download_and_parse(src)
-        print(f"解析 {src} 获取 {len(channels)} 条频道")
-        for ch in channels:
-            if ch.url not in seen_urls:
-                seen_urls.add(ch.url)
-                all_channels.append(ch)
-    # 步骤2：自动生成CCTV规则探测链接，加入待测试列表
-    probe_channels = generate_cctv_probe_channels()
-    for ch in probe_channels:
-        if ch.url not in seen_urls:
-            seen_urls.add(ch.url)
-            all_channels.append(ch)
-    print(f"去重后全部待检测频道总数：{len(all_channels)}")
-    # 步骤3：多线程并发测速校验
-    group_container: Dict[str, List[ChannelItem]] = {g: [] for g in GROUP_ORDER}
-    passed = 0
+def extract_probe_templates(valid_items: List[ChannelItem]) -> List[str]:
+    """从第一轮有效链接中动态提取两类探测模板字符串"""
+    template_set = set()
+    for item in valid_items:
+        url = item.url
+        # 提取tsfile模板 http://xxx/000X_1.m3u8?xxx → http://xxx/000{n}_1.m3u8?xxx
+        ts_match = PATTERN_TSFILE_TPL.search(url)
+        if ts_match:
+            prefix, _, suffix = ts_match.groups()
+            tpl = f"{prefix}000{{n}}_1{suffix}"
+            template_set.add(tpl)
+        # 提取hls模板 http://xxx/hls/X/live.m3u8 → http://xxx/hls/{n}/live.m3u8
+        hls_match = PATTERN_HLS_TPL.search(url)
+        if hls_match:
+            prefix, _, suffix = hls_match.groups()
+            tpl = f"{prefix}{{n}}{suffix}"
+            template_set.add(tpl)
+    templates = list(template_set)
+    print(f"\n✅ 从首轮有效CCTV链接提取到 {len(templates)} 套动态探测模板：")
+    for t in templates:
+        print(f" - {t}")
+    return templates
+def generate_probe_from_templates(templates: List[str]) -> List[ChannelItem]:
+    """根据提取到的模板批量生成CCTV1~17探测频道"""
+    probe_list = []
+    for tpl in templates:
+        for num in CCTV_NUM_RANGE:
+            url = tpl.format(n=num)
+            ch_name = f"CCTV{num}"
+            probe_list.append(
+                ChannelItem(
+                    extinf=f'#EXTINF:-1,{ch_name}',
+                    url=url,
+                    name=ch_name,
+                    cctv_digit=str(num)
+                )
+            )
+    print(f"\n✅ 动态模板共生成待二次探测链接：{len(probe_list)} 条")
+    return probe_list
+def batch_check_channels(channels: List[ChannelItem], seen: Set[str]) -> Tuple[List[ChannelItem], Set[str]]:
+    """通用批量测速函数，返回本轮有效频道 + 更新全局去重集合"""
+    valid_res: List[ChannelItem] = []
     task_map = {}
-    print(f"\n开始并发测速，并发线程数：{MAX_WORKERS}")
+    print(f"\n开始并发测速，待检测 {len(channels)} 条，并发数 {MAX_WORKERS}")
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-        for ch in all_channels:
+        for ch in channels:
+            if ch.url in seen:
+                continue
             future = executor.submit(check_stream_valid, ch.url)
             task_map[future] = ch
         finished = 0
+        total = len(task_map)
         for future in as_completed(task_map):
             finished += 1
             ch = task_map[future]
             try:
                 ok, height = future.result()
             except Exception as e:
-                print(f"[{finished}/{len(all_channels)}] 任务异常 {ch.name}: {str(e)}")
+                print(f"[{finished}/{total}] 任务异常 {ch.name}: {str(e)}")
                 continue
-            print(f"[{finished}/{len(all_channels)}] {ch.name} | {ch.url[:70]}...")
+            print(f"[{finished}/{total}] {ch.name} | {ch.url[:70]}...")
             if ok and height >= MIN_HEIGHT:
-                group_tag = classify_channel(ch)
-                if group_tag is not None:
-                    group_container[group_tag].append(ch)
-                    passed += 1
-                    print(f"✅ 通过 | {height}P | {group_tag.split(',#genre#')[0]}")
-                else:
-                    print(f"❌ 测速正常，无匹配分组，丢弃")
+                seen.add(ch.url)
+                valid_res.append(ch)
+                print(f"✅ 通过 | {height}P")
             else:
-                print(f"❌ 链接失效或分辨率不足 ok={ok} height={height}")
-    print(f"\n最终保留有效频道总数：{passed}")
-    # 步骤4：输出 sou.txt 名称,链接
+                print(f"❌ 失效/分辨率不足 ok={ok} height={height}")
+    return valid_res, seen
+def main():
+    all_seen_urls: Set[str] = set()
+    group_container: Dict[str, List[ChannelItem]] = {g: [] for g in GROUP_ORDER}
+    # ========== 阶段1：加载sources.list远程源，第一轮测速筛选有效源 ==========
+    print("===== 阶段1：加载并解析所有远程源 =====")
+    source_urls = load_sources()
+    print(f"读取 sources.list 共 {len(source_urls)} 个远程地址")
+    raw_all_channels: List[ChannelItem] = []
+    for src in source_urls:
+        channels = download_and_parse(src)
+        print(f"解析 {src} 获取 {len(channels)} 条频道")
+        for ch in channels:
+            if ch.url not in all_seen_urls:
+                all_seen_urls.add(ch.url)
+                raw_all_channels.append(ch)
+    print(f"\n待首轮测速总频道：{len(raw_all_channels)}")
+    first_round_valid, all_seen_urls = batch_check_channels(raw_all_channels, all_seen_urls)
+    print(f"\n===== 阶段1完成：首轮有效频道 {len(first_round_valid)} 条 =====")
+    # 先把首轮有效频道按分类存入分组容器
+    for ch in first_round_valid:
+        tag = classify_channel(ch)
+        if tag:
+            group_container[tag].append(ch)
+    # ========== 阶段2：从首轮有效CCTV链接提取模板，批量生成探测链接 ==========
+    print("\n===== 阶段2：动态提取模板并生成CCTV1~17全量探测链接 =====")
+    probe_templates = extract_probe_templates(first_round_valid)
+    if not probe_templates:
+        print("未提取到可探测模板，跳过二次探测")
+    else:
+        probe_channels = generate_probe_from_templates(probe_templates)
+        # ========== 阶段3：二次测速探测生成的新链接 ==========
+        print("\n===== 阶段3：二次测速动态模板生成的CCTV链接 =====")
+        second_round_valid, all_seen_urls = batch_check_channels(probe_channels, all_seen_urls)
+        print(f"\n===== 阶段3完成：二次探测新增有效CCTV {len(second_round_valid)} 条 =====")
+        # 二次有效频道并入分组
+        for ch in second_round_valid:
+            tag = classify_channel(ch)
+            if tag:
+                group_container[tag].append(ch)
+    # ========== 阶段4：分组排序并输出sou.txt ==========
+    print("\n===== 阶段4：分组排序，生成最终 sou.txt =====")
+    total_final = sum(len(lst) for lst in group_container.values())
+    print(f"最终全部有效频道总数：{total_final}")
     with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
         for group_tag in GROUP_ORDER:
             items = group_container[group_tag]
