@@ -35,6 +35,11 @@ CCTV_URL_PATTERNS = [
     r"http://cssbyd\.imwork\.net:8082/hls/(\d{1,2})/index\.m3u8",
     r"http://118\.81\.195\.79:9003/hls/(\d{1,2})/index\.m3u8", # 新增探测地址正则
 ]
+# 新增：三种CCTV链接格式正则，用于从已输出sou.txt提取补全缺失CCTV源
+FORMAT1_PATTERN = re.compile(r"cctv(\d{1,2})\.m3u8")          # {n}.m3u8 n1-17 CCTVn
+FORMAT2_PATTERN = re.compile(r"000(\d{1,2})_1\.m3u8")        # {n}_1.m3u8 n1-17 CCTVn
+FORMAT3_PATTERN = re.compile(r"/hls/(\d{1,2})/index\.m3u8") # {n}/index.m3u8 n1-18 n6=CCTV5+,n>6对应CCTV(n-1)
+
 CCTV_VALID_NUMBERS = set(str(i) for i in CCTV_NUM_RANGE)
 REGEX_CCTV_PREFIX = re.compile(r"CCTV-?")
 REGEX_CCTV_NUM = re.compile(r"CCTV-?(\d{1,2})")
@@ -220,6 +225,89 @@ def sort_cctv_group(items: List[ChannelItem]) -> List[ChannelItem]:
             non_digit_channels.append(ch)
     digit_channels.sort(key=lambda x: int(x.cctv_digit))
     return digit_channels + non_digit_channels
+
+# 新增：从已生成sou.txt读取链接，提取三种CCTV模板，生成完整1~17补全链接
+def generate_complement_cctv_from_sou() -> List[ChannelItem]:
+    complement_list = []
+    if not OUTPUT_FILE.exists():
+        return complement_list
+    # 读取第一轮生成的sou.txt
+    with open(OUTPUT_FILE, "r", encoding="utf-8") as f:
+        sou_lines = [line.strip() for line in f.readlines() if line.strip() and "," in line]
+    # 提取所有三种模板基础URL模板
+    template_map: Dict[str, str] = {} # key:模板类型标识, value:基础url模板
+    for line in sou_lines:
+        name, url = line.split(",", maxsplit=1)
+        # 匹配格式1 cctv{n}.m3u8
+        m1 = FORMAT1_PATTERN.search(url)
+        if m1:
+            n = m1.group(1)
+            base_tpl = url.replace(f"cctv{n}.m3u8", "cctv{n}.m3u8")
+            template_map["fmt1"] = base_tpl
+            continue
+        # 匹配格式2 000{n}_1.m3u8
+        m2 = FORMAT2_PATTERN.search(url)
+        if m2:
+            n = m2.group(1)
+            base_tpl = url.replace(f"000{n}_1.m3u8", "000{n}_1.m3u8")
+            template_map["fmt2"] = base_tpl
+            continue
+        # 匹配格式3 /hls/{n}/index.m3u8
+        m3 = FORMAT3_PATTERN.search(url)
+        if m3:
+            n = m3.group(1)
+            base_tpl = re.sub(r"/hls/\d{1,2}/index\.m3u8", r"/hls/{n}/index.m3u8", url)
+            template_map["fmt3"] = base_tpl
+            continue
+    # 根据提取到的模板生成完整CCTV1-17补全链接
+    # fmt1 cctv{n}.m3u8 n=1~17 → CCTVn
+    if "fmt1" in template_map:
+        tpl = template_map["fmt1"]
+        for num in range(1, 18):
+            url = tpl.format(n=num)
+            ch_name = f"CCTV{num}"
+            complement_list.append(ChannelItem(
+                extinf=f'#EXTINF:-1,{ch_name}',
+                url=url,
+                name=ch_name,
+                cctv_digit=str(num)
+            ))
+    # fmt2 000{n}_1.m3u8 n=1~17 → CCTVn
+    if "fmt2" in template_map:
+        tpl = template_map["fmt2"]
+        for num in range(1, 18):
+            url = tpl.format(n=f"{num:02d}")
+            ch_name = f"CCTV{num}"
+            complement_list.append(ChannelItem(
+                extinf=f'#EXTINF:-1,{ch_name}',
+                url=url,
+                name=ch_name,
+                cctv_digit=str(num)
+            ))
+    # fmt3 /hls/{n}/index.m3u8 n1-18，n6=CCTV5+，n>6对应CCTV(n-1)
+    if "fmt3" in template_map:
+        tpl = template_map["fmt3"]
+        for raw_n in range(1, 19):
+            url = tpl.format(n=raw_n)
+            if raw_n == 6:
+                ch_name = "CCTV5+"
+                digit = None
+            elif raw_n < 6:
+                ch_name = f"CCTV{raw_n}"
+                digit = str(raw_n)
+            else: # raw_n >=7 → CCTV(raw_n-1)
+                real_n = raw_n - 1
+                ch_name = f"CCTV{real_n}"
+                digit = str(real_n)
+            complement_list.append(ChannelItem(
+                extinf=f'#EXTINF:-1,{ch_name}',
+                url=url,
+                name=ch_name,
+                cctv_digit=digit
+            ))
+    print(f"✅ 从第一轮sou.txt提取模板生成补全CCTV链接：{len(complement_list)} 条")
+    return complement_list
+
 def main():
     all_channels: List[ChannelItem] = []
     seen_urls: Set[str] = set()
@@ -269,8 +357,8 @@ def main():
                     print(f"❌ 测速正常，无匹配分组，丢弃")
             else:
                 print(f"❌ 链接失效或分辨率不足 ok={ok} height={height}")
-    print(f"\n最终保留有效频道总数：{passed}")
-    # 步骤4：输出 sou.txt 名称,链接
+    print(f"\n第一轮有效频道总数：{passed}")
+    # 步骤4：第一次输出临时sou.txt
     with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
         for group_tag in GROUP_ORDER:
             items = group_container[group_tag]
@@ -280,7 +368,60 @@ def main():
                 items = sort_cctv_group(items)
             for ch in items:
                 f.write(f"{ch.name},{ch.url}\n")
-    print(f"\n✅ 文件生成完成：{OUTPUT_FILE.name}")
+    print(f"\n✅ 第一轮临时文件生成完成：{OUTPUT_FILE.name}")
+
+    # ===================== 新增逻辑开始 =====================
+    # 步骤5：从第一轮sou.txt提取三种CCTV链接模板，生成完整补全CCTV链接
+    complement_cctv = generate_complement_cctv_from_sou()
+    # 合并补全链接到待检测列表，自动去重
+    for ch in complement_cctv:
+        if ch.url not in seen_urls:
+            seen_urls.add(ch.url)
+            all_channels.append(ch)
+    print(f"\n合并补全链接后总待检测频道：{len(all_channels)}")
+    # 步骤6：二次并发校验新增的补全CCTV链接（仅校验新增，也可全量，这里复用现有流程统一校验）
+    task_map2 = {}
+    print(f"\n开始校验补全CCTV链接，并发线程数：{MAX_WORKERS}")
+    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+        for ch in complement_cctv:
+            future = executor.submit(check_stream_valid, ch.url)
+            task_map2[future] = ch
+        finished2 = 0
+        add_passed = 0
+        for future in as_completed(task_map2):
+            finished2 += 1
+            ch = task_map2[future]
+            try:
+                ok, height = future.result()
+            except Exception as e:
+                print(f"[补全链接{finished2}/{len(complement_cctv)}] 任务异常 {ch.name}: {str(e)}")
+                continue
+            print(f"[补全链接{finished2}/{len(complement_cctv)}] {ch.name} | {ch.url[:70]}...")
+            if ok and height >= MIN_HEIGHT:
+                group_tag = classify_channel(ch)
+                if group_tag is not None:
+                    group_container[group_tag].append(ch)
+                    add_passed += 1
+                    print(f"✅ 补全链接通过 | {height}P | {group_tag.split(',#genre#')[0]}")
+                else:
+                    print(f"❌ 补全链接测速正常，无匹配分组，丢弃")
+            else:
+                print(f"❌ 补全链接失效或分辨率不足 ok={ok} height={height}")
+    passed += add_passed
+    print(f"\n补全链接新增有效频道：{add_passed}，最终总有效频道：{passed}")
+    # ===================== 新增逻辑结束 =====================
+
+    # 步骤7：覆盖写入最终完整sou.txt（包含原有+补全有效CCTV源）
+    with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
+        for group_tag in GROUP_ORDER:
+            items = group_container[group_tag]
+            if not items:
+                continue
+            if group_tag == "央视频道,#genre#":
+                items = sort_cctv_group(items)
+            for ch in items:
+                f.write(f"{ch.name},{ch.url}\n")
+    print(f"\n✅ 最终完整文件生成完成：{OUTPUT_FILE.name}")
     print(f"在线地址：https://github.com/smxhlh/TV/blob/main/sou.txt")
 if __name__ == "__main__":
     main()
