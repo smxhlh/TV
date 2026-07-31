@@ -189,7 +189,7 @@ def sort_cctv_group(items: List[ChannelItem]) -> List[ChannelItem]:
     digit_channels.sort(key=lambda x: int(x.cctv_digit))
     return digit_channels + non_digit_channels
 def extract_probe_templates(valid_items: List[ChannelItem]) -> List[str]:
-    """从第一轮有效链接中动态提取两类探测模板字符串"""
+    """从首轮有效链接中动态提取两类探测模板字符串"""
     template_set = set()
     for item in valid_items:
         url = item.url
@@ -228,18 +228,17 @@ def generate_probe_from_templates(templates: List[str]) -> List[ChannelItem]:
     print(f"\n✅ 动态模板共生成待二次探测链接：{len(probe_list)} 条")
     return probe_list
 def batch_check_channels(channels: List[ChannelItem], seen: Set[str]) -> Tuple[List[ChannelItem], Set[str]]:
-    """通用批量测速函数，返回本轮有效频道 + 更新全局去重集合"""
+    """【修复核心】批量测速：不提前跳过，全部送入线程；仅测速通过后存入seen去重集合"""
     valid_res: List[ChannelItem] = []
     task_map = {}
     print(f"\n开始并发测速，待检测 {len(channels)} 条，并发数 {MAX_WORKERS}")
+    # 修复：全部频道加入测速任务，不再提前过滤
+    for ch in channels:
+        future = executor.submit(check_stream_valid, ch.url)
+        task_map[future] = ch
+    finished = 0
+    total = len(task_map)
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-        for ch in channels:
-            if ch.url in seen:
-                continue
-            future = executor.submit(check_stream_valid, ch.url)
-            task_map[future] = ch
-        finished = 0
-        total = len(task_map)
         for future in as_completed(task_map):
             finished += 1
             ch = task_map[future]
@@ -249,9 +248,11 @@ def batch_check_channels(channels: List[ChannelItem], seen: Set[str]) -> Tuple[L
                 print(f"[{finished}/{total}] 任务异常 {ch.name}: {str(e)}")
                 continue
             print(f"[{finished}/{total}] {ch.name} | {ch.url[:70]}...")
+            # 仅测速成功、高清才加入有效列表 & 全局去重集合
             if ok and height >= MIN_HEIGHT:
-                seen.add(ch.url)
-                valid_res.append(ch)
+                if ch.url not in seen:
+                    seen.add(ch.url)
+                    valid_res.append(ch)
                 print(f"✅ 通过 | {height}P")
             else:
                 print(f"❌ 失效/分辨率不足 ok={ok} height={height}")
@@ -264,14 +265,14 @@ def main():
     source_urls = load_sources()
     print(f"读取 sources.list 共 {len(source_urls)} 个远程地址")
     raw_all_channels: List[ChannelItem] = []
+    # 修复：解析时只存入列表，不提前加入all_seen_urls
     for src in source_urls:
         channels = download_and_parse(src)
         print(f"解析 {src} 获取 {len(channels)} 条频道")
         for ch in channels:
-            if ch.url not in all_seen_urls:
-                all_seen_urls.add(ch.url)
-                raw_all_channels.append(ch)
+            raw_all_channels.append(ch)
     print(f"\n待首轮测速总频道：{len(raw_all_channels)}")
+    # 第一轮测速
     first_round_valid, all_seen_urls = batch_check_channels(raw_all_channels, all_seen_urls)
     print(f"\n===== 阶段1完成：首轮有效频道 {len(first_round_valid)} 条 =====")
     # 先把首轮有效频道按分类存入分组容器
@@ -282,6 +283,7 @@ def main():
     # ========== 阶段2：从首轮有效CCTV链接提取模板，批量生成探测链接 ==========
     print("\n===== 阶段2：动态提取模板并生成CCTV1~17全量探测链接 =====")
     probe_templates = extract_probe_templates(first_round_valid)
+    second_round_valid = []
     if not probe_templates:
         print("未提取到可探测模板，跳过二次探测")
     else:
