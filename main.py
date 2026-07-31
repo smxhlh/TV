@@ -20,6 +20,9 @@ REQUEST_HEADERS = {
     "Accept-Language": "zh-CN,zh;q=0.9",
     "Connection": "keep-alive"
 }
+# 提取两类动态模板正则
+PATTERN_TSFILE_TPL = re.compile(r"(http://.+?/)000(\d{1,2})_1(\.m3u8\?.+)")
+PATTERN_HLS_TPL = re.compile(r"(http://.+?/hls/)(\d{1,2})(/.+\.m3u8)")
 # URL正则匹配识别CCTV链接
 CCTV_URL_PATTERNS = [
     r"http://69\.30\.245\.50/live/cctv(\d{1,2})\.m3u8",
@@ -32,11 +35,6 @@ CCTV_URL_PATTERNS = [
 CCTV_VALID_NUMBERS = set(str(i) for i in CCTV_NUM_RANGE)
 REGEX_CCTV_PREFIX = re.compile(r"CCTV-?")
 REGEX_CCTV_NUM = re.compile(r"CCTV-?(\d{1,2})")
-# 提取两类动态模板正则
-# 模板1：000数字_1.m3u8
-PATTERN_TSFILE_TPL = re.compile(r"(http://.+?/)000(\d{1,2})_1(\.m3u8\?.+)")
-# 模板2：/hls/数字/xxx.m3u8
-PATTERN_HLS_TPL = re.compile(r"(http://.+?/hls/)(\d{1,2})(/.+\.m3u8)")
 # 保留分组，无匹配直接丢弃
 GROUP_ORDER = [
     "央视频道,#genre#",
@@ -78,7 +76,7 @@ def download_m3u(url: str) -> Optional[str]:
 def is_standard_m3u(text: str) -> bool:
     text_clean = text.strip().lower()
     return text_clean.startswith("#extm3u") or "#extinf" in text_clean
-def parse_m3u(raw_text: str) -> List[ChannelItem]:
+def parse_m3u(raw_text) -> List[ChannelItem]:
     items: List[ChannelItem] = []
     lines = raw_text.splitlines()
     extinf_cache = ""
@@ -94,7 +92,7 @@ def parse_m3u(raw_text: str) -> List[ChannelItem]:
             digit_match = REGEX_CCTV_NUM.search(name)
             digit = digit_match.group(1) if digit_match else None
             items.append(ChannelItem(extinf=extinf_cache, url=line, name=name, cctv_digit=digit))
-            extinf_cache = ""
+            extinf = ""
     return items
 def parse_txt_source(raw_text: str) -> List[ChannelItem]:
     items: List[ChannelItem] = []
@@ -189,17 +187,14 @@ def sort_cctv_group(items: List[ChannelItem]) -> List[ChannelItem]:
     digit_channels.sort(key=lambda x: int(x.cctv_digit))
     return digit_channels + non_digit_channels
 def extract_probe_templates(valid_items: List[ChannelItem]) -> List[str]:
-    """从首轮有效链接中动态提取两类探测模板字符串"""
     template_set = set()
     for item in valid_items:
         url = item.url
-        # 提取tsfile模板 http://xxx/000X_1.m3u8?xxx → http://xxx/000{n}_1.m3u8?xxx
         ts_match = PATTERN_TSFILE_TPL.search(url)
         if ts_match:
             prefix, _, suffix = ts_match.groups()
             tpl = f"{prefix}000{{n}}_1{suffix}"
             template_set.add(tpl)
-        # 提取hls模板 http://xxx/hls/X/live.m3u8 → http://xxx/hls/{n}/live.m3u8
         hls_match = PATTERN_HLS_TPL.search(url)
         if hls_match:
             prefix, _, suffix = hls_match.groups()
@@ -211,7 +206,6 @@ def extract_probe_templates(valid_items: List[ChannelItem]) -> List[str]:
         print(f" - {t}")
     return templates
 def generate_probe_from_templates(templates: List[str]) -> List[ChannelItem]:
-    """根据提取到的模板批量生成CCTV1~17探测频道"""
     probe_list = []
     for tpl in templates:
         for num in CCTV_NUM_RANGE:
@@ -227,28 +221,27 @@ def generate_probe_from_templates(templates: List[str]) -> List[ChannelItem]:
             )
     print(f"\n✅ 动态模板共生成待二次探测链接：{len(probe_list)} 条")
     return probe_list
+# ========== 修复后的批量测速函数（线程池放到最前面定义）==========
 def batch_check_channels(channels: List[ChannelItem], seen: Set[str]) -> Tuple[List[ChannelItem], Set[str]]:
-    """【修复核心】批量测速：不提前跳过，全部送入线程；仅测速通过后存入seen去重集合"""
     valid_res: List[ChannelItem] = []
     task_map = {}
-    print(f"\n开始并发测速，待检测 {len(channels)} 条，并发数 {MAX_WORKERS}")
-    # 修复：全部频道加入测速任务，不再提前过滤
-    for ch in channels:
-        future = executor.submit(check_stream_valid, ch.url)
-        task_map[future] = ch
-    finished = 0
-    total = len(task_map)
+    # 【修复】线程池提前创建，不再作用域错位
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+        print(f"\n开始并发测速，待检测 {len(channels)} 条，并发数 {MAX_WORKERS}")
+        for ch in channels:
+            future = executor.submit(check_stream_valid, ch.url)
+            task_map[future] = finished
+        finished = 0
+        total = len(task_map)
         for future in as_completed(task_map):
-            finished += 1
             ch = task_map[future]
+            finished += 1
             try:
                 ok, height = future.result()
             except Exception as e:
                 print(f"[{finished}/{total}] 任务异常 {ch.name}: {str(e)}")
                 continue
             print(f"[{finished}/{total}] {ch.name} | {ch.url[:70]}...")
-            # 仅测速成功、高清才加入有效列表 & 全局去重集合
             if ok and height >= MIN_HEIGHT:
                 if ch.url not in seen:
                     seen.add(ch.url)
@@ -260,12 +253,11 @@ def batch_check_channels(channels: List[ChannelItem], seen: Set[str]) -> Tuple[L
 def main():
     all_seen_urls: Set[str] = set()
     group_container: Dict[str, List[ChannelItem]] = {g: [] for g in GROUP_ORDER}
-    # ========== 阶段1：加载sources.list远程源，第一轮测速筛选有效源 ==========
+    # ========== 阶段1：加载并解析所有远程源 ==========
     print("===== 阶段1：加载并解析所有远程源 =====")
     source_urls = load_sources()
     print(f"读取 sources.list 共 {len(source_urls)} 个远程地址")
     raw_all_channels: List[ChannelItem] = []
-    # 修复：解析时只存入列表，不提前加入all_seen_urls
     for src in source_urls:
         channels = download_and_parse(src)
         print(f"解析 {src} 获取 {len(channels)} 条频道")
@@ -275,12 +267,12 @@ def main():
     # 第一轮测速
     first_round_valid, all_seen_urls = batch_check_channels(raw_all_channels, all_seen_urls)
     print(f"\n===== 阶段1完成：首轮有效频道 {len(first_round_valid)} 条 =====")
-    # 先把首轮有效频道按分类存入分组容器
+    # 存入分组
     for ch in first_round_valid:
         tag = classify_channel(ch)
         if tag:
             group_container[tag].append(ch)
-    # ========== 阶段2：从首轮有效CCTV链接提取模板，批量生成探测链接 ==========
+    # ========== 阶段2：提取模板生成CCTV探测链接 ==========
     print("\n===== 阶段2：动态提取模板并生成CCTV1~17全量探测链接 =====")
     probe_templates = extract_probe_templates(first_round_valid)
     second_round_valid = []
@@ -288,16 +280,15 @@ def main():
         print("未提取到可探测模板，跳过二次探测")
     else:
         probe_channels = generate_probe_from_templates(probe_templates)
-        # ========== 阶段3：二次测速探测生成的新链接 ==========
+        # ========== 阶段3：二次测速 ==========
         print("\n===== 阶段3：二次测速动态模板生成的CCTV链接 =====")
         second_round_valid, all_seen_urls = batch_check_channels(probe_channels, all_seen_urls)
         print(f"\n===== 阶段3完成：二次探测新增有效CCTV {len(second_round_valid)} 条 =====")
-        # 二次有效频道并入分组
         for ch in second_round_valid:
             tag = classify_channel(ch)
             if tag:
                 group_container[tag].append(ch)
-    # ========== 阶段4：分组排序并输出sou.txt ==========
+    # ========== 阶段4：输出文件 ==========
     print("\n===== 阶段4：分组排序，生成最终 sou.txt =====")
     total_final = sum(len(lst) for lst in group_container.values())
     print(f"最终全部有效频道总数：{total_final}")
