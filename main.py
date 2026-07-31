@@ -5,7 +5,6 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import List, Dict, Tuple, Set, Optional
 from dataclasses import dataclass
 from pathlib import Path
-
 # ====================== 全局配置 ======================
 SOURCE_LIST_PATH = Path("sources.list")
 OUTPUT_FILE = Path("sou.txt")
@@ -13,7 +12,13 @@ TIMEOUT_HTTP = 10
 FFMPEG_TIMEOUT = 12
 MIN_HEIGHT = 720
 MAX_WORKERS = 10
-
+# 请求头模拟浏览器，解决PHP防盗链拦截
+REQUEST_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Accept": "text/plain,application/x-mpegurl,application/vnd.apple.mpegurl,*/*;q=0.8",
+    "Accept-Language": "zh-CN,zh;q=0.9",
+    "Connection": "keep-alive"
+}
 # CCTV固定模板【用于URL匹配识别 + 自动生成探测链接】
 # 格式：(url模板字符串, 名称前缀)
 CCTV_GENERATE_TEMPLATES = [
@@ -21,7 +26,6 @@ CCTV_GENERATE_TEMPLATES = [
     ("http://74.91.26.218:82/live/cctv{n}hd.m3u8", "CCTV{n}"),
 ]
 CCTV_NUM_RANGE = list(range(1, 18))  # 1~17
-
 # URL正则匹配（解析识别CCTV链接）
 CCTV_URL_PATTERNS = [
     r"http://69\.30\.245\.50/live/cctv(\d{1,2})\.m3u8",
@@ -32,10 +36,8 @@ CCTV_URL_PATTERNS = [
     r"http://118\.81\.195\.79:9003/hls/(\d{1,2})/index\.m3u8", # 新增探测地址正则
 ]
 CCTV_VALID_NUMBERS = set(str(i) for i in CCTV_NUM_RANGE)
-
 REGEX_CCTV_PREFIX = re.compile(r"CCTV-?")
 REGEX_CCTV_NUM = re.compile(r"CCTV-?(\d{1,2})")
-
 # 保留分组，无匹配直接丢弃
 GROUP_ORDER = [
     "央视频道,#genre#",
@@ -43,15 +45,12 @@ GROUP_ORDER = [
     "卫视频道,#genre#",
     "河南频道,#genre#"
 ]
-
 @dataclass
 class ChannelItem:
     extinf: str
     url: str
     name: str
     cctv_digit: Optional[str] = None
-
-
 def generate_cctv_probe_channels() -> List[ChannelItem]:
     """自动生成两套规则CCTV1~17探测频道"""
     probe_list = []
@@ -69,31 +68,48 @@ def generate_cctv_probe_channels() -> List[ChannelItem]:
             )
     print(f"✅ 自动生成探测频道数量：{len(probe_list)}")
     return probe_list
-
-
 def load_sources() -> List[str]:
     with open(SOURCE_LIST_PATH, "r", encoding="utf-8") as f:
         lines = [i.strip() for i in f.readlines() if i.strip() and not i.startswith("#")]
     return lines
-
-
 def download_m3u(url: str) -> Optional[str]:
+    """修复：增加UA、允许重定向、自动处理编码、过滤HTML报错页面"""
     try:
-        resp = requests.get(url, timeout=TIMEOUT_HTTP)
+        resp = requests.get(
+            url,
+            headers=REQUEST_HEADERS,
+            timeout=TIMEOUT_HTTP,
+            allow_redirects=True
+        )
         resp.raise_for_status()
-        resp.encoding = "utf-8"
-        return resp.text
+        # 过滤PHP返回HTML页面（不是M3U源）
+        html_signatures = ["<html", "<!DOCTYPE html", "<head", "<body"]
+        raw = resp.text
+        lower_raw = raw.lower()
+        for sig in html_signatures:
+            if sig in lower_raw:
+                print(f"[拦截HTML页面] {url} 返回网页而非直播源")
+                return None
+        # 统一UTF-8，清除BOM、首尾空白
+        raw = raw.lstrip('\ufeff').strip()
+        return raw
     except Exception as e:
         print(f"[下载失败] {url} : {str(e)}")
         return None
-
-
+def is_standard_m3u(text: str) -> bool:
+    """判断是否为M3U（兼容PHP动态输出，优先#EXTM3U，其次#EXTINF）"""
+    text_clean = text.strip().lower()
+    # 标准M3U必须以#extm3u开头，其次包含#extinf
+    return text_clean.startswith("#extm3u") or "#extinf" in text_clean
 def parse_m3u(raw_text: str) -> List[ChannelItem]:
     items: List[ChannelItem] = []
     lines = raw_text.splitlines()
     extinf_cache = ""
     for line in lines:
         line = line.strip()
+        # 跳过#EXTM3U头部、空行、纯注释
+        if not line or line.startswith("#extm3u") or (line.startswith("#") and not line.startswith("#EXTINF:")):
+            continue
         if line.startswith("#EXTINF:"):
             extinf_cache = line
         elif line.startswith("http") and extinf_cache:
@@ -104,7 +120,6 @@ def parse_m3u(raw_text: str) -> List[ChannelItem]:
             items.append(ChannelItem(extinf=extinf_cache, url=line, name=name, cctv_digit=digit))
             extinf_cache = ""
     return items
-
 # 新增：解析逗号分隔txt直播源（名称,url）
 def parse_txt_source(raw_text: str) -> List[ChannelItem]:
     items: List[ChannelItem] = []
@@ -133,18 +148,17 @@ def parse_txt_source(raw_text: str) -> List[ChannelItem]:
             cctv_digit=digit
         ))
     return items
-
-# 新增：统一下载+自动判断是m3u还是txt源
+# 修复：统一下载+智能区分PHP动态M3U/普通txt
 def download_and_parse(url: str) -> List[ChannelItem]:
     raw_text = download_m3u(url)
     if not raw_text:
         return []
-    # 包含#EXTINF就是标准m3u，否则按txt逗号格式解析
-    if "#EXTINF" in raw_text:
+    # 优先判断标准M3U（含#EXTM3U/#EXTINF），PHP动态m3u走这里
+    if is_standard_m3u(raw_text):
         return parse_m3u(raw_text)
     else:
+        # 仅无M3U标记时才按逗号txt解析
         return parse_txt_source(raw_text)
-
 def check_stream_valid(url: str) -> Tuple[bool, Optional[int]]:
     cmd = [
         "ffmpeg",
@@ -179,12 +193,9 @@ def check_stream_valid(url: str) -> Tuple[bool, Optional[int]]:
             except:
                 pass
         return False, None
-
-
 def classify_channel(item: ChannelItem) -> Optional[str]:
     name = item.name
     url = item.url
-
     match_cctv_url = False
     for pattern in CCTV_URL_PATTERNS:
         if re.match(pattern, url):
@@ -192,19 +203,13 @@ def classify_channel(item: ChannelItem) -> Optional[str]:
             break
     if match_cctv_url and REGEX_CCTV_PREFIX.search(name):
         return "央视频道,#genre#"
-
     if "影" in name:
         return "电影频道,#genre#"
-
     if "卫视" in name:
         return "卫视频道,#genre#"
-
     if "河南" in name and "河南卫视" not in name:
         return "河南频道,#genre#"
-
     return None
-
-
 def sort_cctv_group(items: List[ChannelItem]) -> List[ChannelItem]:
     digit_channels: List[ChannelItem] = []
     non_digit_channels: List[ChannelItem] = []
@@ -215,15 +220,12 @@ def sort_cctv_group(items: List[ChannelItem]) -> List[ChannelItem]:
             non_digit_channels.append(ch)
     digit_channels.sort(key=lambda x: int(x.cctv_digit))
     return digit_channels + non_digit_channels
-
-
 def main():
     all_channels: List[ChannelItem] = []
     seen_urls: Set[str] = set()
-
-    # 步骤1：加载远程m3u源
+    # 步骤1：加载远程m3u源（含PHP动态m3u）
     source_urls = load_sources()
-    print(f"加载 {len(source_urls)} 个远程m3u源")
+    print(f"加载 {len(source_urls)} 个远程源地址")
     for src in source_urls:
         channels = download_and_parse(src)
         print(f"解析 {src} 获取 {len(channels)} 条频道")
@@ -231,27 +233,22 @@ def main():
             if ch.url not in seen_urls:
                 seen_urls.add(ch.url)
                 all_channels.append(ch)
-
-    # 步骤2：【新增】自动生成CCTV规则探测链接，加入待测试列表
+    # 步骤2：自动生成CCTV规则探测链接，加入待测试列表
     probe_channels = generate_cctv_probe_channels()
     for ch in probe_channels:
         if ch.url not in seen_urls:
             seen_urls.add(ch.url)
             all_channels.append(ch)
-
     print(f"去重后全部待检测频道总数：{len(all_channels)}")
-
     # 步骤3：多线程并发测速校验
     group_container: Dict[str, List[ChannelItem]] = {g: [] for g in GROUP_ORDER}
     passed = 0
     task_map = {}
-
     print(f"\n开始并发测速，并发线程数：{MAX_WORKERS}")
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
         for ch in all_channels:
             future = executor.submit(check_stream_valid, ch.url)
             task_map[future] = ch
-
         finished = 0
         for future in as_completed(task_map):
             finished += 1
@@ -261,7 +258,6 @@ def main():
             except Exception as e:
                 print(f"[{finished}/{len(all_channels)}] 任务异常 {ch.name}: {str(e)}")
                 continue
-
             print(f"[{finished}/{len(all_channels)}] {ch.name} | {ch.url[:70]}...")
             if ok and height >= MIN_HEIGHT:
                 group_tag = classify_channel(ch)
@@ -272,10 +268,8 @@ def main():
                 else:
                     print(f"❌ 测速正常，无匹配分组，丢弃")
             else:
-                print(f"❌ 链接失效或分辨率不足 {ok} {height}")
-
+                print(f"❌ 链接失效或分辨率不足 ok={ok} height={height}")
     print(f"\n最终保留有效频道总数：{passed}")
-
     # 步骤4：输出 sou.txt 名称,链接
     with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
         for group_tag in GROUP_ORDER:
@@ -286,10 +280,7 @@ def main():
                 items = sort_cctv_group(items)
             for ch in items:
                 f.write(f"{ch.name},{ch.url}\n")
-
     print(f"\n✅ 文件生成完成：{OUTPUT_FILE.name}")
     print(f"在线地址：https://github.com/smxhlh/TV/blob/main/sou.txt")
-
-
 if __name__ == "__main__":
     main()
