@@ -39,6 +39,8 @@ CCTV_URL_PATTERNS = [
 FORMAT1_PATTERN = re.compile(r"cctv(\d{1,2})\.m3u8")          # {n}.m3u8 n1-17 CCTVn
 FORMAT2_PATTERN = re.compile(r"000(\d{1,2})_1\.m3u8")        # {n}_1.m3u8 n1-17 CCTVn
 FORMAT3_PATTERN = re.compile(r"/hls/(\d{1,2})/index\.m3u8") # {n}/index.m3u8 n1-18 n6=CCTV5+,n>6对应CCTV(n-1)
+# 新增：匹配 cctv{n}hd.m3u8 格式，用于自动提取模板批量生成
+FORMAT4_PATTERN = re.compile(r"cctv(\d{1,2})hd\.m3u8")
 
 CCTV_VALID_NUMBERS = set(str(i) for i in CCTV_NUM_RANGE)
 REGEX_CCTV_PREFIX = re.compile(r"CCTV-?")
@@ -226,7 +228,7 @@ def sort_cctv_group(items: List[ChannelItem]) -> List[ChannelItem]:
     digit_channels.sort(key=lambda x: int(x.cctv_digit))
     return digit_channels + non_digit_channels
 
-# 新增：从已生成sou.txt读取链接，提取三种CCTV模板，生成完整1~17补全链接
+# 新增：从已生成sou.txt读取链接，提取四种CCTV模板，生成完整1~17补全链接
 def generate_complement_cctv_from_sou() -> List[ChannelItem]:
     complement_list = []
     if not OUTPUT_FILE.exists():
@@ -234,7 +236,7 @@ def generate_complement_cctv_from_sou() -> List[ChannelItem]:
     # 读取第一轮生成的sou.txt
     with open(OUTPUT_FILE, "r", encoding="utf-8") as f:
         sou_lines = [line.strip() for line in f.readlines() if line.strip() and "," in line]
-    # 提取所有三种模板基础URL模板
+    # 提取所有四种模板基础URL模板
     template_map: Dict[str, str] = {} # key:模板类型标识, value:基础url模板
     for line in sou_lines:
         name, url = line.split(",", maxsplit=1)
@@ -258,6 +260,13 @@ def generate_complement_cctv_from_sou() -> List[ChannelItem]:
             n = m3.group(1)
             base_tpl = re.sub(r"/hls/\d{1,2}/index\.m3u8", r"/hls/{n}/index.m3u8", url)
             template_map["fmt3"] = base_tpl
+            continue
+        # 新增匹配格式4 cctv{n}hd.m3u8
+        m4 = FORMAT4_PATTERN.search(url)
+        if m4:
+            n = m4.group(1)
+            base_tpl = url.replace(f"cctv{n}hd.m3u8", "cctv{n}hd.m3u8")
+            template_map["fmt4"] = base_tpl
             continue
     # 根据提取到的模板生成完整CCTV1-17补全链接
     # fmt1 cctv{n}.m3u8 n=1~17 → CCTVn
@@ -305,6 +314,18 @@ def generate_complement_cctv_from_sou() -> List[ChannelItem]:
                 name=ch_name,
                 cctv_digit=digit
             ))
+    # 新增fmt4 cctv{n}hd.m3u8 n=1~17 → CCTVn
+    if "fmt4" in template_map:
+        tpl = template_map["fmt4"]
+        for num in range(1, 18):
+            url = tpl.format(n=num)
+            ch_name = f"CCTV{num}"
+            complement_list.append(ChannelItem(
+                extinf=f'#EXTINF:-1,{ch_name}',
+                url=url,
+                name=ch_name,
+                cctv_digit=str(num)
+            ))
     print(f"✅ 从第一轮sou.txt提取模板生成补全CCTV链接：{len(complement_list)} 条")
     return complement_list
 
@@ -328,13 +349,26 @@ def main():
             seen_urls.add(ch.url)
             all_channels.append(ch)
     print(f"去重后全部待检测频道总数：{len(all_channels)}")
-    # 步骤3：多线程并发测速校验
+
+    # 新增：预过滤，只保留名称能匹配分组的频道，减少ffmpeg测试数量
+    valid_name_channels = []
+    discard_by_name = 0
+    for ch in all_channels:
+        group_tag = classify_channel(ch)
+        if group_tag is not None:
+            valid_name_channels.append(ch)
+        else:
+            discard_by_name += 1
+            print(f"[名称不匹配分组，跳过测速] {ch.name} | {ch.url[:60]}...")
+    print(f"\n名称过滤完成：丢弃{discard_by_name}条，仅{len(valid_name_channels)}条进入测速")
+
+    # 步骤3：多线程并发测速校验（只测名称符合要求的频道）
     group_container: Dict[str, List[ChannelItem]] = {g: [] for g in GROUP_ORDER}
     passed = 0
     task_map = {}
     print(f"\n开始并发测速，并发线程数：{MAX_WORKERS}")
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-        for ch in all_channels:
+        for ch in valid_name_channels:
             future = executor.submit(check_stream_valid, ch.url)
             task_map[future] = ch
         finished = 0
@@ -344,17 +378,14 @@ def main():
             try:
                 ok, height = future.result()
             except Exception as e:
-                print(f"[{finished}/{len(all_channels)}] 任务异常 {ch.name}: {str(e)}")
+                print(f"[{finished}/{len(valid_name_channels)}] 任务异常 {ch.name}: {str(e)}")
                 continue
-            print(f"[{finished}/{len(all_channels)}] {ch.name} | {ch.url[:70]}...")
+            print(f"[{finished}/{len(valid_name_channels)}] {ch.name} | {ch.url[:70]}...")
             if ok and height >= MIN_HEIGHT:
                 group_tag = classify_channel(ch)
-                if group_tag is not None:
-                    group_container[group_tag].append(ch)
-                    passed += 1
-                    print(f"✅ 通过 | {height}P | {group_tag.split(',#genre#')[0]}")
-                else:
-                    print(f"❌ 测速正常，无匹配分组，丢弃")
+                group_container[group_tag].append(ch)
+                passed += 1
+                print(f"✅ 通过 | {height}P | {group_tag.split(',#genre#')[0]}")
             else:
                 print(f"❌ 链接失效或分辨率不足 ok={ok} height={height}")
     print(f"\n第一轮有效频道总数：{passed}")
@@ -371,7 +402,7 @@ def main():
     print(f"\n✅ 第一轮临时文件生成完成：{OUTPUT_FILE.name}")
 
     # ===================== 新增逻辑开始 =====================
-    # 步骤5：从第一轮sou.txt提取三种CCTV链接模板，生成完整补全CCTV链接
+    # 步骤5：从第一轮sou.txt提取四种CCTV链接模板，生成完整补全CCTV链接
     complement_cctv = generate_complement_cctv_from_sou()
     # 合并补全链接到待检测列表，自动去重
     for ch in complement_cctv:
@@ -379,11 +410,24 @@ def main():
             seen_urls.add(ch.url)
             all_channels.append(ch)
     print(f"\n合并补全链接后总待检测频道：{len(all_channels)}")
-    # 步骤6：二次并发校验新增的补全CCTV链接（仅校验新增，也可全量，这里复用现有流程统一校验）
+
+    # 补全链接先做名称过滤，不匹配直接跳过测速
+    valid_complement_channels = []
+    discard_complement_name = 0
+    for ch in complement_cctv:
+        group_tag = classify_channel(ch)
+        if group_tag is not None:
+            valid_complement_channels.append(ch)
+        else:
+            discard_complement_name += 1
+            print(f"[补全链接名称不匹配分组，跳过测速] {ch.name} | {ch.url[:60]}...")
+    print(f"补全链接名称过滤：丢弃{discard_complement_name}条，{len(valid_complement_channels)}条进入测速")
+
+    # 步骤6：二次并发校验新增的补全CCTV链接（仅校验名称符合的）
     task_map2 = {}
     print(f"\n开始校验补全CCTV链接，并发线程数：{MAX_WORKERS}")
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-        for ch in complement_cctv:
+        for ch in valid_complement_channels:
             future = executor.submit(check_stream_valid, ch.url)
             task_map2[future] = ch
         finished2 = 0
@@ -394,17 +438,14 @@ def main():
             try:
                 ok, height = future.result()
             except Exception as e:
-                print(f"[补全链接{finished2}/{len(complement_cctv)}] 任务异常 {ch.name}: {str(e)}")
+                print(f"[补全链接{finished2}/{len(valid_complement_channels)}] 任务异常 {ch.name}: {str(e)}")
                 continue
-            print(f"[补全链接{finished2}/{len(complement_cctv)}] {ch.name} | {ch.url[:70]}...")
+            print(f"[补全链接{finished2}/{len(valid_complement_channels)}] {ch.name} | {ch.url[:70]}...")
             if ok and height >= MIN_HEIGHT:
                 group_tag = classify_channel(ch)
-                if group_tag is not None:
-                    group_container[group_tag].append(ch)
-                    add_passed += 1
-                    print(f"✅ 补全链接通过 | {height}P | {group_tag.split(',#genre#')[0]}")
-                else:
-                    print(f"❌ 补全链接测速正常，无匹配分组，丢弃")
+                group_container[group_tag].append(ch)
+                add_passed += 1
+                print(f"✅ 补全链接通过 | {height}P | {group_tag.split(',#genre#')[0]}")
             else:
                 print(f"❌ 补全链接失效或分辨率不足 ok={ok} height={height}")
     passed += add_passed
