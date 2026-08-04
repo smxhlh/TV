@@ -4,19 +4,13 @@ CCTV2,http://183.185.65.33:9003/hls/2/index.m3u8
 CCTV3,http://183.185.65.33:9003/hls/3/index.m3u8
 CCTV4,http://183.185.65.33:9003/hls/4/index.m3u8
 CCTV5,http://183.185.65.33:9003/hls/5/index.m3u8
-CCTV5,http://42.225.146.247:8089/hls/5/index.m3u8
 CCTV5+,http://183.185.65.33:9003/hls/6/index.m3u8
 CCTV6,http://183.185.65.33:9003/hls/7/index.m3u8
-CCTV6,http://42.225.146.247:8089/hls/6/index.m3u8
 CCTV7,http://183.185.65.33:9003/hls/8/index.m3u8
-CCTV8,http://42.225.146.247:8089/hls/8/index.m3u8
 CCTV9,http://183.185.65.33:9003/hls/10/index.m3u8
-CCTV9,http://42.225.146.247:8089/hls/9/index.m3u8
 CCTV10,http://183.185.65.33:9003/hls/11/index.m3u8
-CCTV10,http://42.225.146.247:8089/hls/10/index.m3u8
 CCTV11,http://183.185.65.33:9003/hls/12/index.m3u8
 CCTV12,http://183.185.65.33:9003/hls/13/index.m3u8
-CCTV12,http://42.225.146.247:8089/hls/12/index.m3u8
 CCTV13,http://183.185.65.33:9003/hls/14/index.m3u8
 CCTV14,http://183.185.65.33:9003/hls/15/index.m3u8
 CCTV15,http://183.185.65.33:9003/hls/16/index.m3u8
@@ -51,8 +45,5 @@ CHC动作电影,http://183.185.65.33:9003/hls/41/index.m3u8
 广西卫视,http://183.185.65.33:9003/hls/27/index.m3u8
 广东卫视,http://183.185.65.33:9003/hls/26/index.m3u8
 江西卫视,http://183.185.65.33:9003/hls/36/index.m3u8
-江苏卫视,http://42.225.146.247:8089/hls/31/index.m3u8
-湖南卫视,http://42.225.146.247:8089/hls/30/index.m3u8
-安徽卫视,http://42.225.146.247:8089/hls/37/index.m3u8
 
 其他,#genre#
