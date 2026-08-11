@@ -5,24 +5,18 @@
 
 央视频道,#genre#
 CCTV3,http://112.30.73.119:229/tsfile/live/0003_2.m3u8?key=txiptv&playlive=0&authid=0
-CCTV8,http://1.192.152.76:9901/tsfile/live/0008_1.m3u8?key=txiptv&playlive=1&authid=0
+CCTV3,http://112.30.73.119:9901/tsfile/live/0003_2.m3u8?key=txiptv&playlive=0&authid=0
+CCTV6,http://120.40.39.246:352/newlive/live/hls/7/live.m3u8
 CCTV9,http://113.26.202.52:1299/tsfile/live/0009_1.m3u8?key=txiptv&playlive=1&authid=0
-CCTV13,http://1.192.152.76:9901/tsfile/live/1023_1.m3u8?key=txiptv&playlive=1&authid=0
-CCTV14,http://1.192.152.76:9901/tsfile/live/1024_1.m3u8?key=txiptv&playlive=1&authid=0
-CCTV15,http://1.192.152.76:9901/tsfile/live/1025_1.m3u8?key=txiptv&playlive=1&authid=0
+CCTV14,http://120.40.39.246:352/newlive/live/hls/15/live.m3u8
+CCTV15,http://120.40.39.246:352/newlive/live/hls/16/live.m3u8
 
 影视,#genre#
 
 卫视频道,#genre#
-云南卫视,http://182.140.125.47:808/hls/47/index.m3u8
 内蒙古卫视,http://222.71.55.147:9901/tsfile/live/0109_1.m3u8?key=txiptv&playlive=0&authid=0
 内蒙古卫视,http://182.140.125.47:808/hls/51/index.m3u8
 四川卫视,http://182.140.125.47:808/hls/18/index.m3u8
-宁夏卫视,http://222.71.55.147:9901/tsfile/live/0112_1.m3u8?key=txiptv&playlive=0&authid=0
-安徽卫视,http://182.140.125.47:808/hls/42/index.m3u8
-新疆卫视,http://222.71.55.147:9901/tsfile/live/0110_1.m3u8?key=txiptv&playlive=0&authid=0
-浙江卫视,http://113.26.202.52:1299/tsfile/live/0124_1.m3u8?key=txiptv&playlive=1&authid=0
-西藏卫视,http://222.71.55.147:9901/tsfile/live/0111_1.m3u8?key=txiptv&playlive=0&authid=0
+江苏卫视,http://120.40.39.246:352/newlive/live/hls/31/live.m3u8
 辽宁卫视,http://182.140.125.47:808/hls/44/index.m3u8
 重庆卫视,http://182.140.125.47:808/hls/39/index.m3u8
-陕西卫视,http://222.71.55.147:9901/tsfile/live/0136_1.m3u8?key=txiptv&playlive=0&authid=0
