@@ -61,13 +61,22 @@ final_movie = {}
 final_henan = {}
 final_weishi = {}
 
-# ===================== 新增：CCTV名称标准化函数 =====================
+# ===================== 新增：CCTV名称标准化函数（新增纯数字频道识别） =====================
 def standardize_cctv_name(raw_name: str) -> str | None:
     """
-    4CCTV1、sCCTV-1、4CCTV-1综合 → CCTV1
-    CCTV5+、CCTV13 → 原样保留CCTV5+ / CCTV13
+    支持三种格式统一转为标准CCTV名称：
+    1. 纯数字："2" → CCTV2
+    2. 带前后缀数字字母：4CCTV1、sCCTV-1、2 → CCTV1 / CCTV2
+    3. 带后缀文字：CCTV1综合、CCTV-2高清 → CCTV1 / CCTV2
+    CCTV5+、CCTV13+ 带加号完整保留
     不匹配返回None
     """
+    raw_strip = raw_name.strip()
+    # 分支1：频道名仅纯数字（匹配你遇到的 "2" 这种格式）
+    if raw_strip.isdigit():
+        return f"CCTV{raw_strip}"
+    
+    # 分支2：原有匹配含CCTV字符的格式
     match = CCTV_STD_PATTERN.search(raw_name)
     if not match:
         return None
@@ -205,7 +214,7 @@ def load_old_links():
     print(f"旧文件共读取 {len(old_channel_links)} 条历史链接")
 
 def classify_old_channel(name: str, url: str):
-    # CCTV标准化
+    # CCTV标准化（包含纯数字频道名自动转为CCTVx）
     std_cctv = standardize_cctv_name(name)
     if std_cctv is not None:
         return "cctv", std_cctv
@@ -269,7 +278,7 @@ def parse_m3u(raw_text: str):
 
 def classify_channel(name: str, url: str):
     print(f"解析新频道：{name}")
-    # CCTV标准化重命名
+    # CCTV标准化重命名（纯数字自动补CCTV前缀）
     std_cctv = standardize_cctv_name(name)
     if std_cctv is not None:
         raw_cctv.append((std_cctv, url))
@@ -345,14 +354,14 @@ def merge_all_links():
     merge_channel_source(old_speed_map["henan"], new_henan_speed_map, final_henan)
     merge_channel_source(old_speed_map["weishi"], new_weishi_speed_map, final_weishi)
     merge_channel_source(old_speed_map["movie"], new_movie_speed_map, final_movie)
-    print(f"\n旧链接+新源链接合并完成，高清源优先，不足{MAX_SOURCE_PER_CHANNEL}条自动补充480P标清源至{MAX_SOURCE_PER_CHANNEL}条，低于480P全部丢弃")
+    print(f"\n旧链接+新源链接合并完成，高清源优先，不足{MAX_SOURCE_PER_CHANNEL}条自动补充480P标清源至{MAX_SOURCE_PER_CHANNEL}条，低于480P自动丢弃")
 
 # ===================== 输出文件 =====================
 def save_merge_file():
     content = "# IPTV全部分类源\n"
     content += f"# 高清阈值：{MIN_HD_WIDTH}×{MIN_HD_HEIGHT} | 兜底标清阈值：{MIN_SD_WIDTH}×{MIN_SD_HEIGHT}\n"
     content += f"# 规则：优先全部高清源，不足{MAX_SOURCE_PER_CHANNEL}条则补充480P标清源凑满{MAX_SOURCE_PER_CHANNEL}条；低于480P自动丢弃\n"
-    content += "# CCTV频道自动标准化：4CCTV1/sCCTV-1综合 → CCTV1，CCTV5+保留加号格式\n\n"
+    content += "# CCTV频道自动标准化：纯数字2→CCTV2、4CCTV1/sCCTV-1综合 → CCTV1，CCTV5+保留加号格式\n\n"
 
     # 央视排序
     content += "央视频道,#genre#\n"
@@ -401,7 +410,7 @@ def save_merge_file():
 
 def main():
     is_ci = os.getenv("GITHUB_ACTIONS") is not None
-    print("===== M3U IPTV 高清测速合并工具（CCTV标准化+480P兜底补源版） =====")
+    print("===== M3U IPTV 高清测速合并工具（CCTV标准化+纯数字自动补CCTV前缀+480P兜底补源版） =====")
     print(f"当前运行环境：{'Github Actions CI' if is_ci else '本地电脑'}")
     if REUSE_OLD_SOURCE:
         load_old_links()
