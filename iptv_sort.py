@@ -24,7 +24,6 @@ HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/150.0.0.0 Safari/537.36"
 }
 # CCTV标准化正则：匹配 4CCTV1、sCCTV-1、CCTV1综合、CCTV-1综合 等
-# 捕获 CCTV数字(+?) 核心标识
 CCTV_STD_PATTERN = re.compile(r".*(CCTV(\d+\+?)).*", re.IGNORECASE)
 WEISHI_KEY = "卫视"
 HENAN_CHANNELS = {
@@ -61,46 +60,45 @@ final_movie = {}
 final_henan = {}
 final_weishi = {}
 
-# ===================== 新增：CCTV名称标准化函数（新增纯数字频道识别） =====================
+# ===================== CCTV名称标准化函数【强制修复：所有纯数字强制转CCTVx，禁止裸数字】 =====================
 def standardize_cctv_name(raw_name: str) -> str | None:
-    """
-    支持三种格式统一转为标准CCTV名称：
-    1. 纯数字："2" → CCTV2
-    2. 带前后缀数字字母：4CCTV1、sCCTV-1、2 → CCTV1 / CCTV2
-    3. 带后缀文字：CCTV1综合、CCTV-2高清 → CCTV1 / CCTV2
-    CCTV5+、CCTV13+ 带加号完整保留
-    不匹配返回None
-    """
     raw_strip = raw_name.strip()
-    # 分支1：频道名仅纯数字（匹配你遇到的 "2" 这种格式）
+    # 分支1：纯数字强制转为CCTVx，仅允许1-17
     if raw_strip.isdigit():
-        return f"CCTV{raw_strip}"
-    
-    # 分支2：原有匹配含CCTV字符的格式
+        num = int(raw_strip)
+        if 1 <= num <= 17:
+            return f"CCTV{num}"
+        else:
+            return None
+    # 分支2：匹配带CCTV标识的频道
     match = CCTV_STD_PATTERN.search(raw_name)
     if not match:
         return None
     core = match.group(2)
-    # 去掉中间横杠，统一格式 CCTV-1 → CCTV1
     core_clean = core.replace("-", "")
+    # 过滤超过CCTV17的频道
+    num_match = re.search(r"\d+", core_clean)
+    if num_match:
+        num_val = int(num_match.group())
+        if num_val > 17:
+            return None
     return core_clean
 
-# ===================== 分辨率检测工具【重构优化】 =====================
+# ===================== 分辨率检测工具 =====================
 def get_video_resolution(url: str, timeout: float = 1.0):
     cmd = [
         "ffprobe",
         "-v", "error",
         "-print_format", "json",
         "-show_streams",
-        "-max_delay", "800000",       # 延长媒体缓冲等待
+        "-max_delay", "800000",
         "-flags", "low_delay",
         "-read_ahead_limit", "2048",
         "-timeout", f"{int(timeout*1000)}000",
-        "-user_agent", HEADERS["User-Agent"],  # 携带UA防拦截
+        "-user_agent", HEADERS["User-Agent"],
         url
     ]
     try:
-        # ffprobe额外增加2秒容错超时
         result = subprocess.run(
             cmd,
             stdout=subprocess.PIPE,
@@ -108,7 +106,6 @@ def get_video_resolution(url: str, timeout: float = 1.0):
             text=True,
             timeout=timeout + 2
         )
-        # 命令执行失败直接返回None
         if result.returncode != 0:
             return None
         data = json.loads(result.stdout)
@@ -116,14 +113,11 @@ def get_video_resolution(url: str, timeout: float = 1.0):
             if stream["codec_type"] == "video":
                 w = int(stream.get("width", 0))
                 h = int(stream.get("height", 0))
-                # 宽高为0无效流直接丢弃
                 if w <= 0 or h <= 0:
                     return None
-                # 低于480P直接丢弃
                 if w < MIN_SD_WIDTH or h < MIN_SD_HEIGHT:
                     return None
                 return (w, h)
-        # 无视频轨道（纯音频）丢弃
         return None
     except Exception:
         return None
@@ -132,7 +126,6 @@ def get_video_resolution(url: str, timeout: float = 1.0):
 def test_url_speed(url: str, timeout: float):
     try:
         start = datetime.now()
-        # 开启自动重定向，兼容302直播源跳转
         resp = requests.head(
             url,
             headers=HEADERS,
@@ -140,12 +133,10 @@ def test_url_speed(url: str, timeout: float):
             allow_redirects=True
         )
         resp.close()
-        # 校验HTTP状态码，非2xx直接判定失效
         if not (200 <= resp.status_code < 300):
             print(f"[失效] 异常状态码{resp.status_code} | {url}")
             return None
         cost = (datetime.now() - start).total_seconds()
-        # 强制执行分辨率检测
         res = get_video_resolution(url, timeout=1.0)
         if res is None:
             print(f"[失效/过低清] ffprobe无法解析或分辨率不足480P | {url}")
@@ -176,17 +167,18 @@ def batch_test_speed(channel_url_list, timeout: float, workers: int):
         for future in as_completed(future_map):
             chan_name = future_map[future]
             res_data = future.result()
-            # res_data为None代表失效/过低清，直接跳过不存入结果
             if res_data is not None:
                 cost, w, h, u = res_data
-                if chan_name not in channel_speed_dict:
-                    channel_speed_dict[chan_name] = []
-                channel_speed_dict[chan_name].append((cost, w, h, u))
-    # 统一排序：高清在前，同清晰度延迟从小到大
+                # 关键：测速时再次标准化，杜绝裸数字key存入字典
+                std_name = standardize_cctv_name(chan_name)
+                save_name = std_name if std_name is not None else chan_name
+                if save_name not in channel_speed_dict:
+                    channel_speed_dict[save_name] = []
+                channel_speed_dict[save_name].append((cost, w, h, u))
+    # 排序：高清优先，同清晰度延迟升序
     for k in channel_speed_dict:
         def sort_rule(item):
             cost, w, h, _ = item
-            # 高清权重1，标清权重0，高清排前面；同权重延迟升序
             hd_flag = 1 if (w >= MIN_HD_WIDTH and h >= MIN_HD_HEIGHT) else 0
             return (-hd_flag, cost)
         channel_speed_dict[k].sort(key=sort_rule)
@@ -214,7 +206,6 @@ def load_old_links():
     print(f"旧文件共读取 {len(old_channel_links)} 条历史链接")
 
 def classify_old_channel(name: str, url: str):
-    # CCTV标准化（包含纯数字频道名自动转为CCTVx）
     std_cctv = standardize_cctv_name(name)
     if std_cctv is not None:
         return "cctv", std_cctv
@@ -232,7 +223,6 @@ def classify_old_channel(name: str, url: str):
 def test_old_links():
     if not old_channel_links:
         return
-    # 每次运行清空旧测速缓存
     old_speed_map["cctv"].clear()
     old_speed_map["henan"].clear()
     old_speed_map["weishi"].clear()
@@ -278,7 +268,6 @@ def parse_m3u(raw_text: str):
 
 def classify_channel(name: str, url: str):
     print(f"解析新频道：{name}")
-    # CCTV标准化重命名（纯数字自动补CCTV前缀）
     std_cctv = standardize_cctv_name(name)
     if std_cctv is not None:
         raw_cctv.append((std_cctv, url))
@@ -310,7 +299,7 @@ def test_new_source():
     new_weishi_speed_map = batch_test_speed(raw_weishi, TEST_TIMEOUT, TEST_WORKERS)
     print(f"新源测速完成")
 
-# ===================== 合并旧有效链接 + 新测速链接【关键：高清优先，补标清凑5条】 =====================
+# ===================== 合并逻辑（合并同数字裸数字+CCTVx，URL去重） =====================
 def merge_channel_source(old_map, new_map, target_final):
     all_names = set(old_map.keys()) | set(new_map.keys())
     for name in all_names:
@@ -319,10 +308,9 @@ def merge_channel_source(old_map, new_map, target_final):
             tmp.extend(old_map[name])
         if name in new_map:
             tmp.extend(new_map[name])
-        # URL去重
+        # URL全局去重
         url_set = set()
         unique_all = []
-        # 先按高清在前、延迟升序排序
         def sort_rule(item):
             cost, w, h, _ = item
             hd_flag = 1 if (w >= MIN_HD_WIDTH and h >= MIN_HD_HEIGHT) else 0
@@ -332,7 +320,7 @@ def merge_channel_source(old_map, new_map, target_final):
             if u not in url_set:
                 url_set.add(u)
                 unique_all.append((cost, w, h, u))
-        # 拆分高清组、标清组
+        # 拆分高清/标清
         hd_list = []
         sd_list = []
         for item in unique_all:
@@ -341,7 +329,6 @@ def merge_channel_source(old_map, new_map, target_final):
                 hd_list.append(item)
             else:
                 sd_list.append(item)
-        # 高清全部保留，不足MAX_SOURCE_PER_CHANNEL则补标清到5条
         final_list = hd_list.copy()
         need_fill = MAX_SOURCE_PER_CHANNEL - len(final_list)
         if need_fill > 0:
@@ -349,40 +336,39 @@ def merge_channel_source(old_map, new_map, target_final):
         target_final[name] = final_list
 
 def merge_all_links():
-    # 合并四类频道
     merge_channel_source(old_speed_map["cctv"], new_cctv_speed_map, final_cctv)
     merge_channel_source(old_speed_map["henan"], new_henan_speed_map, final_henan)
     merge_channel_source(old_speed_map["weishi"], new_weishi_speed_map, final_weishi)
     merge_channel_source(old_speed_map["movie"], new_movie_speed_map, final_movie)
-    print(f"\n旧链接+新源链接合并完成，高清源优先，不足{MAX_SOURCE_PER_CHANNEL}条自动补充480P标清源至{MAX_SOURCE_PER_CHANNEL}条，低于480P自动丢弃")
+    print(f"\n合并完成：统一CCTV1~CCTV17命名、全局URL去重、高清优先不足{MAX_SOURCE_PER_CHANNEL}条补480P标清")
 
-# ===================== 输出文件 =====================
+# ===================== 输出文件【关键：过滤纯数字频道，只输出CCTV前缀】 =====================
 def save_merge_file():
     content = "# IPTV全部分类源\n"
     content += f"# 高清阈值：{MIN_HD_WIDTH}×{MIN_HD_HEIGHT} | 兜底标清阈值：{MIN_SD_WIDTH}×{MIN_SD_HEIGHT}\n"
-    content += f"# 规则：优先全部高清源，不足{MAX_SOURCE_PER_CHANNEL}条则补充480P标清源凑满{MAX_SOURCE_PER_CHANNEL}条；低于480P自动丢弃\n"
-    content += "# CCTV频道自动标准化：纯数字2→CCTV2、4CCTV1/sCCTV-1综合 → CCTV1，CCTV5+保留加号格式\n\n"
+    content += f"# 规则：频道强制统一CCTV1~CCTV17，纯数字自动转换，无裸数字输出；高清优先，不足{MAX_SOURCE_PER_CHANNEL}条补480P\n\n"
 
-    # 央视排序
     content += "央视频道,#genre#\n"
+    # 仅保留CCTV开头频道，过滤纯数字key
+    cctv_only_names = [k for k in final_cctv.keys() if k.startswith("CCTV")]
+    # CCTV按数字升序排序
     def cctv_sort_key(name):
-        match = re.search(r"\d+", name)
-        num_part = match.group() if match else "999"
-        has_plus = 1 if "+" in name else 0
-        return int(num_part), has_plus
-    sorted_cctv_names = sorted(final_cctv.keys(), key=cctv_sort_key)
+        num = int(re.search(r"\d+", name).group())
+        plus_flag = 1 if "+" in name else 0
+        return num, plus_flag
+    sorted_cctv_names = sorted(cctv_only_names, key=cctv_sort_key)
     for cctv_name in sorted_cctv_names:
         for cost, w, h, url in final_cctv[cctv_name]:
             content += f"{cctv_name},{url}\n"
     content += "\n"
-    # 影视
+
     content += "影视,#genre#\n"
     sorted_movie_names = sorted(final_movie.keys())
     for name in sorted_movie_names:
         for cost, w, h, url in final_movie[name]:
             content += f"{name},{url}\n"
     content += "\n"
-    # 河南频道无数据则不输出区块
+
     if len(final_henan) > 0:
         content += "河南频道,#genre#\n"
         sorted_henan_names = sorted(final_henan.keys())
@@ -390,28 +376,29 @@ def save_merge_file():
             for cost, w, h, url in final_henan[name]:
                 content += f"{name},{url}\n"
         content += "\n"
-    # 卫视
+
     content += "卫视频道,#genre#\n"
     sorted_weishi_names = sorted(final_weishi.keys())
     for name in sorted_weishi_names:
         for cost, w, h, url in final_weishi[name]:
             content += f"{name},{url}\n"
+
     with open(OUTPUT_ALL, "w", encoding="utf-8") as f:
         f.write(content)
-    # 统计输出
-    total_cctv_chan = len(final_cctv)
-    total_cctv_link = sum(len(v) for v in final_cctv.values())
+
+    total_cctv_chan = len(sorted_cctv_names)
+    total_cctv_link = sum(len(final_cctv[k]) for k in sorted_cctv_names)
     total_movie_link = sum(len(v) for v in final_movie.values())
     total_henan_link = sum(len(v) for v in final_henan.values())
     total_weishi_link = sum(len(v) for v in final_weishi.values())
     print(f"\n文件生成完成：{OUTPUT_ALL}")
-    print(f"CCTV频道数：{total_cctv_chan} 高清CCTV链接：{total_cctv_link}")
-    print(f"影视高清链接：{total_movie_link} 河南高清链接：{total_henan_link} 卫视高清链接：{total_weishi_link}")
+    print(f"CCTV频道数：{total_cctv_chan} 有效CCTV链接：{total_cctv_link}")
+    print(f"影视链接：{total_movie_link} 河南链接：{total_henan_link} 卫视链接：{total_weishi_link}")
 
 def main():
     is_ci = os.getenv("GITHUB_ACTIONS") is not None
-    print("===== M3U IPTV 高清测速合并工具（CCTV标准化+纯数字自动补CCTV前缀+480P兜底补源版） =====")
-    print(f"当前运行环境：{'Github Actions CI' if is_ci else '本地电脑'}")
+    print("===== IPTV工具 彻底修复裸数字频道输出问题 =====")
+    print(f"运行环境：{'Github Actions CI' if is_ci else '本地电脑'}")
     if REUSE_OLD_SOURCE:
         load_old_links()
         test_old_links()
@@ -421,11 +408,11 @@ def main():
         return
     print("开始解析M3U新频道...")
     parse_m3u(m3u_text)
-    print(f"\n新抓取待测速总链接：CCTV:{len(raw_cctv)} 影视:{len(raw_movie)} 河南:{len(raw_henan)} 卫视:{len(raw_weishi)}")
+    print(f"\n待测速新链接：CCTV:{len(raw_cctv)} 影视:{len(raw_movie)} 河南:{len(raw_henan)} 卫视:{len(raw_weishi)}")
     test_new_source()
     merge_all_links()
     save_merge_file()
-    print("文件生成完毕，等待Workflow提交推送")
+    print("处理完成：不再输出1/3/4/5裸数字，全部统一CCTV1~CCTV17")
 
 if __name__ == "__main__":
     main()
