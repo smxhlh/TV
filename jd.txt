@@ -1,9 +1,24 @@
 央视频道,#genre#
+CCTV1,http://super8gb.x3322.net:9901/tsfile/live/0001_1.m3u8?k
+CCTV2,http://super8gb.x3322.net:9901/tsfile/live/0002_1.m3u8?k
+CCTV5,http://super8gb.x3322.net:9901/tsfile/live/0005_1.m3u8?k
+CCTV6,http://super8gb.x3322.net:9901/tsfile/live/0006_1.m3u8?k
+CCTV13,http://super8gb.x3322.net:9901/tsfile/live/0013_1.m3u8?k
+CCTV14,http://super8gb.x3322.net:9901/tsfile/live/0014_1.m3u8?k
 
 电影频道,#genre#
 
 河南频道,#genre#
 
 卫视频道,#genre#
+湖南卫视,http://super8gb.x3322.net:9901/tsfile/live/0128_1.m3u8?k
+浙江卫视,http://super8gb.x3322.net:9901/tsfile/live/0124_1.m3u8?k
+江苏卫视,http://super8gb.x3322.net:9901/tsfile/live/0127_1.m3u8?k
+广东卫视,http://super8gb.x3322.net:9901/tsfile/live/0125_1.m3u8?k
+四川卫视,http://super8gb.x3322.net:9901/tsfile/live/0123_1.m3u8?k
+贵州卫视,http://super8gb.x3322.net:9901/tsfile/live/0120_1.m3u8?k
+江西卫视,http://super8gb.x3322.net:9901/tsfile/live/0138_1.m3u8?k
+东方卫视,http://super8gb.x3322.net:9901/tsfile/live/0107_1.m3u8?k
+安徽卫视,http://super8gb.x3322.net:9901/tsfile/live/0130_1.m3u8?k
 
 其他,#genre#
