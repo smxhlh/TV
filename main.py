@@ -76,12 +76,13 @@ REGEX_CCTV_PREFIX = re.compile(r"CCTV-?", re.IGNORECASE)
 # 只提取纯数字，用于排序（不含+）
 REGEX_CCTV_NUM = re.compile(r"CCTV-?\s*((?:[1-9]|1[0-7]))", re.IGNORECASE)
 
-# 分组输出顺序
+# 【修改】新增其他频道分组，输出顺序：央视、电影、卫视、河南、其他
 GROUP_ORDER = [
     "央视频道,#genre#",
     "电影频道,#genre#",
     "卫视频道,#genre#",
-    "河南频道,#genre#"
+    "河南频道,#genre#",
+    "其他频道,#genre#"
 ]
 
 @dataclass
@@ -248,8 +249,8 @@ def check_stream_valid(url: str) -> Tuple[bool, Optional[int]]:
         print(f"[测速异常] {url} : {str(e)}")
         return False, None
 
-# ---------------- 修复后的分类函数 ----------------
-def classify_channel(item: ChannelItem) -> Optional[str]:
+# 【修改】分类函数：匹配不到四类自动归入其他频道，不再返回None
+def classify_channel(item: ChannelItem) -> str:
     name = item.name
     url = item.url
     match_cctv_url = False
@@ -258,16 +259,20 @@ def classify_channel(item: ChannelItem) -> Optional[str]:
         if re.search(pattern, url):
             match_cctv_url = True
             break
-    # 兜底：只要名称包含CCTV前缀，直接划入央视频道，解决URL匹配失败跳过测速
+    # 央视优先
     if match_cctv_url or REGEX_CCTV_PREFIX.search(name):
         return "央视频道,#genre#"
+    # 电影频道
     if "影" in name:
         return "电影频道,#genre#"
+    # 卫视频道
     if "卫视" in name:
         return "卫视频道,#genre#"
+    # 河南频道（排除河南卫视，卫视走上面分支）
     if "河南" in name and "河南卫视" not in name:
         return "河南频道,#genre#"
-    return None
+    # 所有不匹配的统一归入其他频道
+    return "其他频道,#genre#"
 
 def sort_cctv_group(items: List[ChannelItem]) -> List[ChannelItem]:
     digit_channels: List[ChannelItem] = []
@@ -383,17 +388,11 @@ def main():
             seen_urls.add(ch.url)
             all_channels.append(ch)
     print(f"去重后待检测频道总数：{len(all_channels)}")
-    # 名称预过滤，不匹配分组直接跳过测速
-    valid_name_channels = []
-    discard_by_name = 0
-    for ch in all_channels:
-        group_tag = classify_channel(ch)
-        if group_tag is not None:
-            valid_name_channels.append(ch)
-        else:
-            discard_by_name += 1
-            print(f"[名称不匹配分组，跳过测速] {ch.name} | {ch.url[:60]}...")
-    print(f"\n名称过滤完成：丢弃{discard_by_name}条，仅{len(valid_name_channels)}条进入测速")
+
+    # 【修改】删除名称过滤丢弃逻辑，全部频道进入测速
+    valid_name_channels = all_channels
+    print(f"\n全部{len(valid_name_channels)}条频道进入测速（无丢弃，统一自动分类）")
+
     # 第一轮并发测速
     group_container: Dict[str, List[ChannelItem]] = {g: [] for g in GROUP_ORDER}
     passed = 0
@@ -443,17 +442,11 @@ def main():
             new_complement.append(ch)
     complement_cctv = new_complement
     print(f"\n合并去重后补全待检测频道：{len(complement_cctv)}")
-    # 补全链接名称预过滤
-    valid_complement_channels = []
-    discard_complement_name = 0
-    for ch in complement_cctv:
-        group_tag = classify_channel(ch)
-        if group_tag is not None:
-            valid_complement_channels.append(ch)
-        else:
-            discard_complement_name += 1
-            print(f"[补全链接名称不匹配分组，跳过测速] {ch.name} | {ch.url[:60]}...")
-    print(f"补全链接名称过滤：丢弃{discard_complement_name}条，{len(valid_complement_channels)}条进入测速")
+
+    # 【修改】补全链接同样全部进入测速，无丢弃
+    valid_complement_channels = complement_cctv
+    print(f"补全链接共{len(valid_complement_channels)}条全部进入测速")
+
     # 二次测速补全HD等链接
     task_map2 = {}
     print(f"\n开始校验补全CCTV链接，并发线程数：{MAX_WORKERS}")
