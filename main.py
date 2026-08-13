@@ -30,7 +30,7 @@ CCTV_GENERATE_TEMPLATES = [
     ("http://127.0.0.1/hls/{n}/index.m3u8", "CCTV{n}")
 ]
 
-# ====================== 频道匹配正则（全覆盖优化版） ======================
+# ====================== 频道匹配正则（修复完整版） ======================
 # 匹配名称CCTV1~17、CCTV5+
 RULE_CCTV = re.compile(r"CCTV-?\s*(?:([1-9]|1[0-7])\+?)", re.IGNORECASE)
 # 电影频道含“影”
@@ -55,18 +55,20 @@ REG_PROXY_IP = re.compile(r"(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})")
 # IP+端口匹配
 REG_IP_PORT = re.compile(r"(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}):(\d+)")
 
-# 四种CCTV m3u8链接格式（限制数字1-17，兼容后缀参数）
+# 四种CCTV m3u8链接格式（新增偏移编号兼容）
 FORMAT1_PATTERN = re.compile(r"/live/cctv([1-9]|1[0-7])(hd)?\.m3u8", re.IGNORECASE)
-FORMAT2_PATTERN = re.compile(r"/tsfile/live/000(0[1-9]|1[0-7])_1\.m3u8", re.IGNORECASE)
-FORMAT3_PATTERN = re.compile(r"/hls/([1-9]|1[0-7])/index\.m3u8", re.IGNORECASE)
+FORMAT2_PATTERN = re.compile(r"/tsfile/live/(000|10)(0[1-9]|1[0-7])_1\.m3u8", re.IGNORECASE)
+FORMAT3_PATTERN = re.compile(r"/hls/(30)?([1-9]|1[0-7])/index\.m3u8", re.IGNORECASE)
 FORMAT4_PATTERN = re.compile(r"cctv([1-9]|1[0-7])hd\.m3u8", re.IGNORECASE)
 
-# CCTV直播URL全局匹配规则（兼容IP/域名前缀、任意?参数）
+# CCTV直播URL全局匹配规则（移除$尾锚，新增偏移路径，兼容任意参数）
 CCTV_URL_PATTERNS = [
-    r".*/live/cctv(?:[1-9]|1[0-7])(hd)?\.m3u8(\?.*)?$",
-    r".*/tsfile/live/000(?:0[1-9]|1[0-7])_1\.m3u8(\?.*)?$",
-    r".*/hls/(?:[1-9]|1[0-7])/index\.m3u8(\?.*)?$",
-    r".*cctv(?:[1-9]|1[0-7])hd\.m3u8(\?.*)?$"
+    r"/live/cctv(?:[1-9]|1[0-7])(hd)?\.m3u8(\?.*)?",
+    r"/tsfile/live/000(?:0[1-9]|1[0-7])_1\.m3u8(\?.*)?",
+    r"/tsfile/live/10(?:0[1-9]|1[0-7])_1\.m3u8(\?.*)?",
+    r"/hls/(?:[1-9]|1[0-7])/index\.m3u8(\?.*)?",
+    r"/hls/30(?:0[1-9]|1[0-7])/index\.m3u8(\?.*)?",
+    r"cctv(?:[1-9]|1[0-7])hd\.m3u8(\?.*)?"
 ]
 
 # 匹配CCTV前缀
@@ -246,15 +248,18 @@ def check_stream_valid(url: str) -> Tuple[bool, Optional[int]]:
         print(f"[测速异常] {url} : {str(e)}")
         return False, None
 
+# ---------------- 修复后的分类函数 ----------------
 def classify_channel(item: ChannelItem) -> Optional[str]:
     name = item.name
     url = item.url
     match_cctv_url = False
+    # 使用re.search全局匹配URL中的路径片段，不再限制开头
     for pattern in CCTV_URL_PATTERNS:
-        if re.match(pattern, url):
+        if re.search(pattern, url):
             match_cctv_url = True
             break
-    if match_cctv_url and REGEX_CCTV_PREFIX.search(name):
+    # 兜底：只要名称包含CCTV前缀，直接划入央视频道，解决URL匹配失败跳过测速
+    if match_cctv_url or REGEX_CCTV_PREFIX.search(name):
         return "央视频道,#genre#"
     if "影" in name:
         return "电影频道,#genre#"
@@ -303,13 +308,13 @@ def generate_complement_cctv_from_sou() -> List[ChannelItem]:
             continue
         m2 = FORMAT2_PATTERN.search(url)
         if m2:
-            n = m2.group(1)
-            base_tpl = url.replace(f"000{n}_1.m3u8", "000{n}_1.m3u8")
+            n = m2.group(2)
+            base_tpl = url.replace(f"{m2.group(1)}{n}_1.m3u8", "{pre}{n:02d}_1.m3u8")
             template_map["fmt2"] = base_tpl
             continue
         m3 = FORMAT3_PATTERN.search(url)
         if m3:
-            base_tpl = re.sub(r"/hls/\d{1,2}/index\.m3u8", r"/hls/{n}/index.m3u8", url)
+            base_tpl = re.sub(r"/hls/(30)?\d{1,2}/index\.m3u8", r"/hls/{pre}{n}/index.m3u8", url)
             template_map["fmt3"] = base_tpl
             continue
         m4 = FORMAT4_PATTERN.search(url)
@@ -325,18 +330,18 @@ def generate_complement_cctv_from_sou() -> List[ChannelItem]:
             url = tpl.format(n=num)
             ch_name = f"CCTV{num}"
             complement_list.append(ChannelItem(f'#EXTINF:-1,{ch_name}', url, ch_name, str(num)))
-    # fmt2 000{n}_1.m3u8
+    # fmt2 000{n}_1.m3u8 / 10{n}_1.m3u8
     if "fmt2" in template_map:
         tpl = template_map["fmt2"]
         for num in range(1, 18):
-            url = tpl.format(n=f"{num:02d}")
+            url = tpl.format(pre="000", n=f"{num:02d}")
             ch_name = f"CCTV{num}"
             complement_list.append(ChannelItem(f'#EXTINF:-1,{ch_name}', url, ch_name, str(num)))
-    # fmt3 /hls/{n}/index.m3u8
+    # fmt3 /hls/{n}/index.m3u8 / hls/30{n}
     if "fmt3" in template_map:
         tpl = template_map["fmt3"]
         for raw_n in range(1, 19):
-            url = tpl.format(n=raw_n)
+            url = tpl.format(pre="", n=raw_n)
             if raw_n == 6:
                 ch_name = "CCTV5+"
                 digit = None
