@@ -5,7 +5,6 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import List, Dict, Tuple, Set, Optional
 from dataclasses import dataclass
 from pathlib import Path
-
 # ====================== 全局配置 ======================
 SOURCE_LIST_PATH = Path("sources.list")
 OUTPUT_FILE = Path("sou.txt")
@@ -20,31 +19,62 @@ REQUEST_HEADERS = {
     "Accept-Language": "zh-CN,zh;q=0.9",
     "Connection": "keep-alive"
 }
-# CCTV固定探测模板（内置HD模板兜底）
-CCTV_GENERATE_TEMPLATES = [
-    ("http://118.81.195.79:9003/hls/{n}/index.m3u8", "CCTV{n}"),
-    ("http://74.91.26.218:82/live/cctv{n}hd.m3u8", "CCTV{n}"),
-]
-CCTV_NUM_RANGE = list(range(1, 18))  # 1~17
-# URL正则匹配识别CCTV链接
-CCTV_URL_PATTERNS = [
-    r"http://69\.30\.245\.50/live/cctv(\d{1,2})\.m3u8",
-    r"http://74\.91\.26\.218:82/live/cctv(\d{1,2})hd\.m3u8",
-    r"http://218\.13\.170\.98:9901/tsfile/live/000(\d{1,2})_1\.m3u8",
-    r"http://112\.46\.85\.60:8009/hls/(\d{1,2})/index\.m3u8",
-    r"http://cssbyd\.imwork\.net:8082/hls/(\d{1,2})/index\.m3u8",
-    r"http://118\.81\.195\.79:9003/hls/(\d{1,2})/index\.m3u8",
-]
-# 四种CCTV链接格式正则（含HD格式）
-FORMAT1_PATTERN = re.compile(r"cctv(\d{1,2})\.m3u8")          # {n}.m3u8
-FORMAT2_PATTERN = re.compile(r"000(\d{1,2})_1\.m3u8")        # {n}_1.m3u8
-FORMAT3_PATTERN = re.compile(r"/hls/(\d{1,2})/index\.m3u8") # /hls/{n}/index.m3u8
-FORMAT4_PATTERN = re.compile(r"cctv(\d{1,2})hd\.m3u8")       # cctv{n}hd.m3u8
-
+# CCTV数字范围 1~17
+CCTV_NUM_RANGE = range(1, 18)
 CCTV_VALID_NUMBERS = set(str(i) for i in CCTV_NUM_RANGE)
-REGEX_CCTV_PREFIX = re.compile(r"CCTV-?")
-REGEX_CCTV_NUM = re.compile(r"CCTV-?(\d{1,2})")
-# 保留分组，无匹配直接丢弃
+# CCTV自动探测生成模板（4种主流路径）
+CCTV_GENERATE_TEMPLATES = [
+    ("http://127.0.0.1/live/cctv{n}.m3u8", "CCTV{n}"),
+    ("http://127.0.0.1/live/cctv{n}hd.m3u8", "CCTV{n} HD"),
+    ("http://127.0.0.1/tsfile/live/000{n:02d}_1.m3u8", "CCTV{n}"),
+    ("http://127.0.0.1/hls/{n}/index.m3u8", "CCTV{n}")
+]
+
+# ====================== 频道匹配正则（全覆盖优化版） ======================
+# 匹配名称CCTV1~17、CCTV5+
+RULE_CCTV = re.compile(r"CCTV-?\s*(?:([1-9]|1[0-7])\+?)", re.IGNORECASE)
+# 电影频道含“影”
+RULE_MOVIE = re.compile(r"影")
+# 河南频道
+RULE_HENAN = re.compile(r"河南")
+# 卫视频道
+RULE_WEISHI = re.compile(r"卫视")
+# 过滤区间无效名称 CCTV1-CCTV10 这类
+LOW_CCTV_FILTER = re.compile(r"CCTV-?\s*(\d{1,2})\s*-\s*CCTV-?\s*(\d{1,2})", re.IGNORECASE)
+# 提取CCTV编号，支持 数字+ 适配CCTV5+，限制1-17
+CCTV_NUM_EXTRACT = re.compile(r"CCTV-?\s*((?:[1-9]|1[0-7])(?:\+)?)", re.IGNORECASE)
+# 标准化CCTV名称，兼容高清/HD/体育后缀
+REG_CCTV_STD = re.compile(
+    r"CCTV-?\s*((?:[1-9]|1[0-7])\+?).*?(体育|高清|HD|-体育)",
+    re.IGNORECASE
+)
+# 过滤标清SD源
+REG_SD_FILTER = re.compile(r"标清|SD", re.IGNORECASE)
+# 单独IP匹配
+REG_PROXY_IP = re.compile(r"(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})")
+# IP+端口匹配
+REG_IP_PORT = re.compile(r"(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}):(\d+)")
+
+# 四种CCTV m3u8链接格式（限制数字1-17，兼容后缀参数）
+FORMAT1_PATTERN = re.compile(r"/live/cctv([1-9]|1[0-7])(hd)?\.m3u8", re.IGNORECASE)
+FORMAT2_PATTERN = re.compile(r"/tsfile/live/000(0[1-9]|1[0-7])_1\.m3u8", re.IGNORECASE)
+FORMAT3_PATTERN = re.compile(r"/hls/([1-9]|1[0-7])/index\.m3u8", re.IGNORECASE)
+FORMAT4_PATTERN = re.compile(r"cctv([1-9]|1[0-7])hd\.m3u8", re.IGNORECASE)
+
+# CCTV直播URL全局匹配规则（兼容IP/域名前缀、任意?参数）
+CCTV_URL_PATTERNS = [
+    r".*/live/cctv(?:[1-9]|1[0-7])(hd)?\.m3u8(\?.*)?$",
+    r".*/tsfile/live/000(?:0[1-9]|1[0-7])_1\.m3u8(\?.*)?$",
+    r".*/hls/(?:[1-9]|1[0-7])/index\.m3u8(\?.*)?$",
+    r".*cctv(?:[1-9]|1[0-7])hd\.m3u8(\?.*)?$"
+]
+
+# 匹配CCTV前缀
+REGEX_CCTV_PREFIX = re.compile(r"CCTV-?", re.IGNORECASE)
+# 只提取纯数字，用于排序（不含+）
+REGEX_CCTV_NUM = re.compile(r"CCTV-?\s*((?:[1-9]|1[0-7]))", re.IGNORECASE)
+
+# 分组输出顺序
 GROUP_ORDER = [
     "央视频道,#genre#",
     "电影频道,#genre#",
@@ -181,7 +211,6 @@ def check_stream_valid(url: str) -> Tuple[bool, Optional[int]]:
         )
         stdout, stderr = proc.communicate(timeout=FFMPEG_TIMEOUT)
         err_lower = stderr.lower()
-
         # 识别两类业务报错：无服务、区域不可用 + 通用HTTP错误
         invalid_err_keywords = [
             "no server configured",
@@ -196,7 +225,6 @@ def check_stream_valid(url: str) -> Tuple[bool, Optional[int]]:
             if kw in err_lower:
                 print(f"[源限制报错] {url} : {kw}")
                 return False, None
-
         # 仅当成功捕获宽高分辨率才视为有效流
         res_match = re.search(r"(\d+)x(\d+)", stderr)
         if res_match:
@@ -204,7 +232,6 @@ def check_stream_valid(url: str) -> Tuple[bool, Optional[int]]:
             return True, height
         # 无分辨率信息 = 无有效视频流
         return False, None
-
     except subprocess.TimeoutExpired:
         if proc:
             proc.kill()
@@ -351,7 +378,6 @@ def main():
             seen_urls.add(ch.url)
             all_channels.append(ch)
     print(f"去重后待检测频道总数：{len(all_channels)}")
-
     # 名称预过滤，不匹配分组直接跳过测速
     valid_name_channels = []
     discard_by_name = 0
@@ -363,7 +389,6 @@ def main():
             discard_by_name += 1
             print(f"[名称不匹配分组，跳过测速] {ch.name} | {ch.url[:60]}...")
     print(f"\n名称过滤完成：丢弃{discard_by_name}条，仅{len(valid_name_channels)}条进入测速")
-
     # 第一轮并发测速
     group_container: Dict[str, List[ChannelItem]] = {g: [] for g in GROUP_ORDER}
     passed = 0
@@ -391,7 +416,6 @@ def main():
             else:
                 print(f"❌ 链接失效或分辨率不足 ok={ok} height={height}")
     print(f"\n第一轮有效频道总数：{passed}")
-
     # 临时输出第一轮结果（用于提取HD模板），每组先去重
     with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
         for group_tag in GROUP_ORDER:
@@ -404,7 +428,6 @@ def main():
             for ch in items:
                 f.write(f"{ch.name},{ch.url}\n")
     print(f"\n✅ 第一轮临时文件生成完成：{OUTPUT_FILE.name}")
-
     # 提取模板生成补全链接
     complement_cctv = generate_complement_cctv_from_sou()
     # 合并补全链接，全局去重
@@ -415,7 +438,6 @@ def main():
             new_complement.append(ch)
     complement_cctv = new_complement
     print(f"\n合并去重后补全待检测频道：{len(complement_cctv)}")
-
     # 补全链接名称预过滤
     valid_complement_channels = []
     discard_complement_name = 0
@@ -427,7 +449,6 @@ def main():
             discard_complement_name += 1
             print(f"[补全链接名称不匹配分组，跳过测速] {ch.name} | {ch.url[:60]}...")
     print(f"补全链接名称过滤：丢弃{discard_complement_name}条，{len(valid_complement_channels)}条进入测速")
-
     # 二次测速补全HD等链接
     task_map2 = {}
     print(f"\n开始校验补全CCTV链接，并发线程数：{MAX_WORKERS}")
@@ -455,7 +476,6 @@ def main():
                 print(f"❌ 补全链接失效或分辨率不足 ok={ok} height={height}")
     passed += add_passed
     print(f"\n补全链接新增有效频道：{add_passed}，最终总有效频道：{passed}")
-
     # 最终写入前每组强制URL去重，彻底解决重复行
     with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
         for group_tag in GROUP_ORDER:
