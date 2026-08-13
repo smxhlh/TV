@@ -16,7 +16,7 @@ MIN_HEIGHT = 720
 MAX_WORKERS = 10
 
 REQUEST_HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36",
     "Accept": "text/plain,application/x-mpegurl,application/vnd.apple.mpegurl,*/*;q=0.8",
     "Accept-Language": "zh-CN,zh;q=0.9",
     "Connection": "keep-alive"
@@ -27,7 +27,7 @@ CCTV_VALID_NUMBERS = set(str(i) for i in CCTV_NUM_RANGE)
 
 CCTV_GENERATE_TEMPLATES = [
     ("http://127.0.0.1/live/cctv{n}.m3u8", "CCTV{n}"),
-    ("http://127.0.0.1/live/cctv{n}hd.m3u8", "CCTV{n} HD"),
+    ("http://127.0.0.1/live/cctv{n}hd.m3u8", "CCTV{n}"),
     ("http://127.0.0.1/tsfile/live/000{n:02d}_1.m3u8", "CCTV{n}"),
     ("http://127.0.0.1/hls/{n}/index.m3u8", "CCTV{n}")
 ]
@@ -42,7 +42,7 @@ CCTV_NUM_EXTRACT = re.compile(r"CCTV-?\s*((?:[1-9]|1[0-7])(?:\+)?)", re.IGNORECA
 REG_CCTV_STD = re.compile(r"CCTV-?\s*((?:[1-9]|1[0-7])\+?).*?(体育|高清|HD|-体育)", re.IGNORECASE)
 REG_SD_FILTER = re.compile(r"标清|SD", re.IGNORECASE)
 REG_PROXY_IP = re.compile(r"(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})")
-REG_IP_PORT = re.compile(r"(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}):(\d+)")
+REG_IP_PORT = re.compile(r"(\d{1,3}\.\d{1,3}\.\d{1,3}):(\d+)")
 
 FORMAT1_PATTERN = re.compile(r"/live/cctv([1-9]|1[0-7])(hd)?\.m3u8", re.IGNORECASE)
 FORMAT2_PATTERN = re.compile(r"/tsfile/live/(000|10)(0[1-9]|1[0-7])_1\.m3u8", re.IGNORECASE)
@@ -77,7 +77,7 @@ class ChannelItem:
     name: str
     cctv_digit: Optional[str] = None
 
-# 检测ffmpeg是否可用
+# 检测ffmpeg
 def check_ffmpeg() -> bool:
     try:
         subprocess.run(["ffmpeg", "-version"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=3)
@@ -97,14 +97,14 @@ def generate_cctv_probe_channels() -> List[ChannelItem]:
 
 def load_sources() -> List[str]:
     if not SOURCE_LIST_PATH.exists():
-        print(f"❌ 错误：{SOURCE_LIST_PATH.name} 文件不存在，请创建并填入源地址！")
+        print(f"❌ {SOURCE_LIST_PATH.name} 不存在，请创建文件填入源地址")
         raise SystemExit(1)
     try:
         with open(SOURCE_LIST_PATH, "r", encoding="utf-8") as f:
             lines = [i.strip() for i in f.readlines() if i.strip() and not i.startswith("#")]
         return lines
     except IOError as e:
-        print(f"❌ 读取sources.list失败：{str(e)}")
+        print(f"❌ 读取sources.list失败: {str(e)}")
         raise SystemExit(1)
 
 def download_m3u(url: str) -> Optional[str]:
@@ -116,7 +116,7 @@ def download_m3u(url: str) -> Optional[str]:
         lower_raw = raw.lower()
         for sig in html_signatures:
             if sig in lower_raw:
-                print(f"[拦截HTML] {url} 返回网页，非直播源")
+                print(f"[拦截HTML] {url}")
                 return None
         return raw
     except Exception as e:
@@ -242,12 +242,11 @@ def generate_complement_cctv_from_sou() -> List[ChannelItem]:
     complement = []
     if not OUTPUT_FILE.exists():
         return complement
-    # 修复：捕获读取临时文件IO异常
     try:
         with open(OUTPUT_FILE, "r", encoding="utf-8") as f:
             all_lines = [line.strip() for line in f.readlines() if line.strip()]
     except IOError as e:
-        print(f"⚠️ 读取临时sou.txt失败，跳过CCTV模板补全：{str(e)}")
+        print(f"⚠️ 读取临时文件失败，跳过补全: {str(e)}")
         return complement
 
     template_map: Dict[str, str] = {}
@@ -262,9 +261,8 @@ def generate_complement_cctv_from_sou() -> List[ChannelItem]:
             continue
         m2 = FORMAT2_PATTERN.search(url)
         if m2:
-            # 修复分组越界：判断分组存在再取值
             pre = m2.group(1) if m2.group(1) else "000"
-            template_map["fmt2"] = url.replace(f"{pre}{m2.group(2)}_1.m3u8", "{pre}{n:02d}_1.m3u8")
+            template_map["fmt2"] = url.replace(f"{pre}{m2.group(2)}_1.m3u8", "{pre}{num_str}_1.m3u8")
             continue
         m3 = FORMAT3_PATTERN.search(url)
         if m3:
@@ -276,17 +274,20 @@ def generate_complement_cctv_from_sou() -> List[ChannelItem]:
             template_map["fmt4"] = url.replace(f"cctv{n}hd.m3u8", "cctv{n}hd.m3u8")
             continue
 
-    # fmt1
+    # fmt1 cctv{n}.m3u8
     if "fmt1" in template_map:
         tpl = template_map["fmt1"]
         for num in range(1, 18):
-            complement.append(ChannelItem(f'#EXTINF:-1,CCTV{num}', tpl.format(n=num), f"CCTV{num}", str(num)))
-    # fmt2
+            url = tpl.format(n=num)
+            complement.append(ChannelItem(f'#EXTINF:-1,CCTV{num}', url, f"CCTV{num}", str(num)))
+    # fmt2 修复格式化BUG：预先生成两位数字字符串
     if "fmt2" in template_map:
         tpl = template_map["fmt2"]
         for num in range(1, 18):
-            complement.append(ChannelItem(f'#EXTINF:-1,CCTV{num}', tpl.format(pre="000", n=f"{num:02d}"), f"CCTV{num}", str(num)))
-    # fmt3
+            num_str = f"{num:02d}"
+            url = tpl.format(pre="000", num_str=num_str)
+            complement.append(ChannelItem(f'#EXTINF:-1,CCTV{num}', url, f"CCTV{num}", str(num)))
+    # fmt3 /hls/{n}/index.m3u8
     if "fmt3" in template_map:
         tpl = template_map["fmt3"]
         for raw_n in range(1, 19):
@@ -301,26 +302,26 @@ def generate_complement_cctv_from_sou() -> List[ChannelItem]:
                 name = f"CCTV{raw_n - 1}"
                 digit = str(raw_n - 1)
             complement.append(ChannelItem(f'#EXTINF:-1,{name}', url, name, digit))
-    # fmt4 hd
+    # fmt4 HD
     if "fmt4" in template_map:
         tpl = template_map["fmt4"]
         for num in range(1, 18):
-            complement.append(ChannelItem(f'#EXTINF:-1,CCTV{num}', tpl.format(n=num), f"CCTV{num}", str(num)))
+            url = tpl.format(n=num)
+            complement.append(ChannelItem(f'#EXTINF:-1,CCTV{num}', url, f"CCTV{num}", str(num)))
+
     print(f"✅ 提取模板生成补全CCTV链接：{len(complement)} 条")
     return complement
 
 def main():
-    # 前置检测ffmpeg
     if not check_ffmpeg():
-        print("❌ 未检测到ffmpeg，请安装并配置环境变量后重试！测速功能无法使用")
+        print("❌ 未找到ffmpeg，无法测速，请安装ffmpeg并配置环境变量")
         raise SystemExit(1)
 
     all_channels: List[ChannelItem] = []
     seen_urls: Set[str] = set()
 
-    # 加载源
     source_urls = load_sources()
-    print(f"加载 {len(source_urls)} 个远程源地址")
+    print(f"加载 {len(source_urls)} 个远程源")
     for src in source_urls:
         chs = download_and_parse(src)
         print(f"解析 {src} 获取 {len(chs)} 条频道")
@@ -329,7 +330,6 @@ def main():
                 seen_urls.add(ch.url)
                 all_channels.append(ch)
 
-    # 生成探测CCTV
     probe = generate_cctv_probe_channels()
     for ch in probe:
         if ch.url not in seen_urls:
@@ -365,7 +365,7 @@ def main():
                 print(f"❌ 失效/分辨率不足 ok={ok} h={h}")
     print(f"\n第一轮有效频道：{passed}")
 
-    # 写入临时文件（捕获IO异常）
+    # 写入临时文件
     try:
         with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
             for tag in GROUP_ORDER:
@@ -378,10 +378,10 @@ def main():
                     f.write(f"{ch.name},{ch.url}\n")
         print(f"\n✅ 第一轮临时文件生成完成：{OUTPUT_FILE.name}")
     except IOError as e:
-        print(f"❌ 写入临时sou.txt失败：{str(e)}")
+        print(f"❌ 写入临时文件失败: {str(e)}")
         raise SystemExit(1)
 
-    # 补全CCTV链接
+    # 补全CCTV（已修复格式化报错）
     complement = generate_complement_cctv_from_sou()
     new_comp = []
     for ch in complement:
@@ -420,7 +420,7 @@ def main():
     passed += add_pass
     print(f"\n补全新增有效：{add_pass}，总有效频道：{passed}")
 
-    # 最终输出OK影视分类文件
+    # 最终OK影视分类输出
     try:
         with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
             for tag in GROUP_ORDER:
@@ -433,9 +433,9 @@ def main():
                     unique = sort_cctv_group(unique)
                 for ch in unique:
                     f.write(f"{ch.name},{ch.url}\n")
-        print(f"\n✅ OK影视分类sou.txt生成完毕：{OUTPUT_FILE.name}")
+        print(f"\n✅ OK影视分类sou.txt生成完毕")
     except IOError as e:
-        print(f"❌ 最终写入sou.txt失败：{str(e)}")
+        print(f"❌ 最终写入文件失败: {str(e)}")
         raise SystemExit(1)
 
 if __name__ == "__main__":
