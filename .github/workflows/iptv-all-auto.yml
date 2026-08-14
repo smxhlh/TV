@@ -1,0 +1,69 @@
+name: IPTV全流程自动更新
+run-name: IPTV自动测速+分拣+采集全量更新
+permissions:
+  contents: write
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main, master ]
+    paths:
+      - 'iptv_sort.py'
+      - '.github/workflows/iptv-all-auto.yml'
+      - 'main.py'
+      - 'new.py'
+      - 'requirements.txt'
+  schedule:
+    # 北京时间06:00 = UTC前一日22:00
+    - cron: '0 22 * * *'
+    # 北京时间18:00 = UTC 10:00
+    - cron: '0 10 * * *'
+
+jobs:
+  iptv-full-task:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出仓库完整代码
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 安装系统依赖 ffmpeg
+        run: sudo apt update && sudo apt install -y ffmpeg
+
+      - name: 配置Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: 安装全量Python依赖包
+        run: |
+          pip install requests selenium futures eventlet aiohttp aiofiles
+          [ -f requirements.txt ] && pip install -r requirements.txt
+
+      - name: 执行IPTV测速脚本 iptv_sort.py
+        run: python iptv_sort.py
+
+      - name: 执行频道分拣脚本 main.py
+        run: python main.py
+
+      - name: 执行频道采集脚本 new.py
+        run: python new.py
+
+      - name: 检测文件变更并自动提交推送
+        run: |
+          git add iptv_all.txt sou.txt *.txt
+          echo "===== 文件差异日志 ====="
+          git diff --cached
+          echo "========================"
+
+          CHANNEL_CHANGE=$(git diff --cached | grep -v '^#' | wc -l)
+          if [ "$CHANNEL_CHANGE" -eq 0 ]; then
+            echo "所有频道文件无有效数据变更，跳过提交推送"
+          else
+            git commit -m "🤖 IPTV全流程自动更新 $(date '+%Y-%m-%d %H:%M')"
+            git push
+          fi
