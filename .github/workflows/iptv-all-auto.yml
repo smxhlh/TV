@@ -21,33 +21,33 @@ on:
     # 北京时间18:00 = UTC 10:00
     - cron: '0 10 * * *'
 
+name: IPTV自动更新
+on: push
 jobs:
-  iptv-full-task:
+  task:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
-      - name: 检出仓库完整代码
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+      - uses: actions/checkout@v4
 
-      - name: 安装系统依赖 ffmpeg
-        run: sudo apt update && sudo apt install -y ffmpeg
-
-      - name: 配置Python 3.11
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-          # 删除 cache: 'pip' 解决找不到requirements.txt报错
-
-      - name: 安装全量Python依赖包
+      - name: 配置Git身份
         run: |
-          # 原requirements.txt依赖指定版本
-          pip install requests>=2.31.0 retry>=0.9.2 python-dotenv>=1.0.0
-          # 原有脚本依赖
-          pip install selenium futures eventlet aiohttp aiofiles
-          # 兼容：如果仓库存在requirements.txt再额外安装
-          if [ -f requirements.txt ]; then
-            pip install -r requirements.txt
+          git config user.name "smxhlh"
+          git config user.email "smxhlh@github.com"
+
+      - name: 安装依赖
+        run: pip install aiohttp requests eventlet
+
+      - name: 运行扫描脚本
+        run: python new.py
+
+      - name: 提交更新文件
+        run: |
+          git add iptv.txt
+          if [[ -n $(git status --porcelain) ]]; then
+            git commit -m "自动更新IPTV源"
+            git push
           fi
 
       - name: 执行IPTV测速脚本 iptv_sort.py
