@@ -5,6 +5,7 @@ permissions:
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
+# 统一触发规则（手动推送/定时/指定文件修改）
 on:
   workflow_dispatch:
   push:
@@ -21,51 +22,42 @@ on:
     # 北京时间18:00 = UTC 10:00
     - cron: '0 10 * * *'
 
-name: IPTV自动更新
-on: push
 jobs:
   task:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
+      # 拉取仓库代码
       - uses: actions/checkout@v4
 
+      # 配置Git身份（你的账号smxhlh）
       - name: 配置Git身份
         run: |
           git config user.name "smxhlh"
           git config user.email "smxhlh@github.com"
 
-      - name: 安装依赖
+      # 批量安装全部依赖
+      - name: 安装Python依赖
         run: pip install aiohttp requests eventlet
 
-      - name: 运行扫描脚本
+      # 1、采集源（只运行一次，删除重复调用）
+      - name: 执行采集脚本 new.py
         run: python new.py
 
-      - name: 提交更新文件
-        run: |
-          git add iptv.txt
-          if [[ -n $(git status --porcelain) ]]; then
-            git commit -m "自动更新IPTV源"
-            git push
-          fi
-
-      - name: 执行IPTV测速脚本 iptv_sort.py
+      # 2、测速分拣
+      - name: 执行测速脚本 iptv_sort.py
         run: python iptv_sort.py
 
+      # 3、频道整理分拣
       - name: 执行频道分拣脚本 main.py
         run: python main.py
 
-      - name: 执行频道采集脚本 new.py
-        run: python new.py
-
-      - name: 检测文件变更并自动提交推送
+      # 统一一次性提交所有txt文件，只推送一次
+      - name: 检测变更并提交推送
         run: |
-          git add iptv_all.txt sou.txt *.txt
+          git add *.txt
           echo "===== 文件差异日志 ====="
           git diff --cached
           echo "========================"
-
           CHANNEL_CHANGE=$(git diff --cached | grep -v '^#' | wc -l)
           if [ "$CHANNEL_CHANGE" -eq 0 ]; then
             echo "所有频道文件无有效数据变更，跳过提交推送"
