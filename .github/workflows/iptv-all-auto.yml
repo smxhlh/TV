@@ -37,16 +37,18 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-          cache: 'pip'
+          # 删除 cache: 'pip' 解决找不到requirements.txt报错
 
       - name: 安装全量Python依赖包
         run: |
-          # 原requirements.txt内置依赖
+          # 原requirements.txt依赖指定版本
           pip install requests>=2.31.0 retry>=0.9.2 python-dotenv>=1.0.0
           # 原有脚本依赖
           pip install selenium futures eventlet aiohttp aiofiles
-          # 若存在本地requirements.txt仍兼容安装
-          [ -f requirements.txt ] && pip install -r requirements.txt
+          # 兼容：如果仓库存在requirements.txt再额外安装
+          if [ -f requirements.txt ]; then
+            pip install -r requirements.txt
+          fi
 
       - name: 执行IPTV测速脚本 iptv_sort.py
         run: python iptv_sort.py
