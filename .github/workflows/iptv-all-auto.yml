@@ -41,7 +41,11 @@ jobs:
 
       - name: 安装全量Python依赖包
         run: |
-          pip install requests selenium futures eventlet aiohttp aiofiles
+          # 原requirements.txt内置依赖
+          pip install requests>=2.31.0 retry>=0.9.2 python-dotenv>=1.0.0
+          # 原有脚本依赖
+          pip install selenium futures eventlet aiohttp aiofiles
+          # 若存在本地requirements.txt仍兼容安装
           [ -f requirements.txt ] && pip install -r requirements.txt
 
       - name: 执行IPTV测速脚本 iptv_sort.py
