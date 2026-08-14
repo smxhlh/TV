@@ -5,7 +5,7 @@ permissions:
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
-# 统一触发规则（手动推送/定时/指定文件修改）
+# 统一触发规则
 on:
   workflow_dispatch:
   push:
@@ -35,15 +35,18 @@ jobs:
           git config user.name "smxhlh"
           git config user.email "smxhlh@github.com"
 
-      # 批量安装全部依赖
-      - name: 安装Python依赖
-        run: pip install aiohttp requests eventlet
+      # 安装系统依赖ffmpeg + python库
+      - name: 安装系统依赖与Python依赖
+        run: |
+          sudo apt update
+          sudo apt install -y ffmpeg
+          pip install aiohttp requests eventlet
 
-      # 1、采集源（只运行一次，删除重复调用）
+      # 1、采集源
       - name: 执行采集脚本 new.py
         run: python new.py
 
-      # 2、测速分拣
+      # 2、测速脚本（依赖ffmpeg，现已预装）
       - name: 执行测速脚本 iptv_sort.py
         run: python iptv_sort.py
 
@@ -51,7 +54,7 @@ jobs:
       - name: 执行频道分拣脚本 main.py
         run: python main.py
 
-      # 统一一次性提交所有txt文件，只推送一次
+      # 统一检测变更并提交推送
       - name: 检测变更并提交推送
         run: |
           git add *.txt
