@@ -8,9 +8,12 @@ import os
 import time
 import threading
 from queue import Queue
+
+# 脚本运行目录，仅输出 iptv.txt
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+OUTPUT_FILE = os.path.join(SCRIPT_DIR, "iptv.txt")
+
 eventlet.monkey_patch()
-
-
 urls = [
 "http://1.192.12.1:9901",
 "http://1.192.248.1:9901",
@@ -663,7 +666,6 @@ urls = [
 "http://61.54.14.1:9901"
 ]
 
-
 async def modify_urls(url):
     modified_urls = []
     ip_start_index = url.find("//") + 2
@@ -711,7 +713,6 @@ async def fetch_json(session, url, semaphore):
             base_url = url[:ip_start_index]
             ip_address = url[ip_start_index:ip_index_second]
             url_x = f"{base_url}{ip_address}"
-
             json_url = f"{url}"
             async with session.get(json_url, timeout=0.5) as response:
                 json_data = await response.json()
@@ -727,7 +728,6 @@ async def fetch_json(session, url, semaphore):
                                 urld = f"{urlx}"
                             else:
                                 urld = f"{url_x}{urlx}"
-
                             if name and urlx:
                                 name = name.replace("cctv", "CCTV")
                                 name = name.replace("中央", "CCTV")
@@ -796,7 +796,6 @@ async def main():
         x_url = f"{base_url}{modified_ip}{port}"
         x_urls.append(x_url)
     unique_urls = set(x_urls)
-
     semaphore = asyncio.Semaphore(500)
     async with aiohttp.ClientSession() as session:
         valid_urls = await check_urls(session, unique_urls, semaphore)
@@ -808,57 +807,12 @@ async def main():
         results = await asyncio.gather(*tasks)
         for sublist in results:
             all_results.extend(sublist)
-
-
+    
+    # 测速线程逻辑
     eventlet.monkey_patch()
     task_queue = eventlet.Queue()
-    results = []
+    speed_results = []
     error_channels = []
-
-    def worker():
-        while True:
-            # 从队列中获取一个任务
-            channel_name, channel_url = task_queue.get()
-            try:
-                channel_url_t = channel_url.rstrip(channel_url.split('/')[-1])  # m3u8链接前缀
-                lines = requests.get(channel_url, timeout=1).text.strip().split('\n')  # 获取m3u8文件内容
-                ts_lists = [line.split('/')[-1] for line in lines if line.startswith('#') == False]  # 获取m3u8文件下视频流后缀
-                ts_lists_0 = ts_lists[0].rstrip(ts_lists[0].split('.ts')[-1])  # m3u8链接前缀
-                ts_url = channel_url_t + ts_lists[0]  # 拼接单个视频片段下载链接
-
-                # 多获取的视频数据进行5秒钟限制
-                with eventlet.Timeout(5, False):
-                    start_time = datetime.datetime.now().timestamp()
-                    content = requests.get(ts_url, timeout=1).content
-                    end_time = datetime.datetime.now().timestamp()
-                    response_time = (end_time - start_time) * 1
-
-                if content:
-                    with open(ts_lists_0, 'ab') as f:
-                        f.write(content)  # 写入文件
-                    file_size = len(content)
-                    # print(f"文件大小：{file_size} 字节")
-                    download_speed = file_size / response_time / 1024
-                    # print(f"下载速度：{download_speed:.3f} kB/s")
-                    normalized_speed = min(max(download_speed / 1024, 0.001), 100)  # 将速率从kB/s转换为MB/s并限制在1~100之间
-                    # print(f"标准化后的速率：{normalized_speed:.3f} MB/s")
-
-                    # 删除下载的文件
-                    os.remove(ts_lists_0)
-                    result = channel_name, channel_url, f"{normalized_speed:.3f} MB/s"
-                    results.append(result)
-                    numberx = (len(results) + len(error_channels)) / len(all_results) * 100
-                    current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                    print(f"{current_time}可用频道：{len(results)} 个 , 不可用频道：{len(error_channels)} 个 , 总频道：{len(all_results)} 个 ,总进度：{numberx:.2f} %。")
-            except:
-                error_channel = channel_name, channel_url
-                error_channels.append(error_channel)
-                numberx = (len(results) + len(error_channels)) / len(all_results) * 100
-                current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                print(f"{current_time}可用频道：{len(results)} 个 , 不可用频道：{len(error_channels)} 个 , 总频道：{len(all_results)} 个 ,总进度：{numberx:.2f} %。")
-
-            # 标记任务完成
-            task_queue.task_done()
 
     def channel_key(channel_name):
         match = re.search(r'\d+', channel_name)
@@ -867,82 +821,88 @@ async def main():
         else:
             return float('inf')
 
+    def worker():
+        while True:
+            channel_name, channel_url = task_queue.get()
+            try:
+                channel_url_t = channel_url.rstrip(channel_url.split('/')[-1])  # m3u8链接前缀
+                lines = requests.get(channel_url, timeout=1).text.strip().split('\n')
+                ts_lists = [line.split('/')[-1] for line in lines if line.startswith('#') == False]  # 获取ts后缀
+                ts_lists_0 = ts_lists[0].rstrip(ts_lists[0].split('.ts')[-1])
+                ts_url = channel_url_t + ts_lists[0]
+                # 测速
+                with eventlet.Timeout(5, False):
+                    start_time = datetime.datetime.now().timestamp()
+                    content = requests.get(ts_url, timeout=1).content
+                    end_time = datetime.datetime.now().timestamp()
+                    response_time = (end_time - start_time)
+                if content:
+                    file_size = len(content)
+                    os.remove(ts_lists_0)
+                    download_speed = file_size / response_time / 1024
+                    normalized_speed = min(max(download_speed / 1024, 0.001), 100)
+                    speed_results.append((channel_name, channel_url, normalized_speed))
+                    total_done = len(speed_results) + len(error_channels)
+                    total_all = len(all_results)
+                    pct = total_done / total_all * 100 if total_all > 0 else 0
+                    current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    print(f"{current_time} 可用频道：{len(speed_results)} 个 , 不可用频道：{len(error_channels)} , 总频道：{total_all} ,总进度：{pct:.2f} %。")
+            except Exception:
+                error_channels.append((channel_name, channel_url))
+                total_done = len(speed_results) + len(error_channels)
+                total_all = len(all_results)
+                pct = total_done / total_all * 100 if total_all > 0 else 0
+                current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                print(f"{current_time} 可用频道：{len(speed_results)} 个 , 不可用频道：{len(error_channels)} , 总频道：{total_all} ,总进度：{pct:.2f} %。")
+            task_queue.task_done()
 
-
-    # 创建工作线程
+    # 启动线程
     num_workers = 10
-    #pool = eventlet.GreenPool(num_workers)
     for _ in range(num_workers):
-        #pool.spawn(worker)
-        t = threading.Thread(target=worker, daemon=True)  # 将工作线程设置为守护线程
+        t = threading.Thread(target=worker, daemon=True)
         t.start()
 
+    # 全部入队
+    for item in all_results:
+        name, url = item.split(',')
+        task_queue.put((name, url))
 
-    # 将all_results中的数据放入任务队列
-    for result in all_results:
-        channel_name, channel_url = result.split(',')
-        task_queue.put((channel_name, channel_url))
-
-
-    # 等待所有任务完成
     task_queue.join()
 
-    # 对结果进行排序
-    #results.sort(key=lambda x: channel_key(x[0]))
-    results.sort(key=lambda x: (x[0], -float(x[2].split()[0])))
-    results.sort(key=lambda x: channel_key(x[0]))
+    # 排序：先数字频道升序，同频道按速度从快到慢
+    speed_results.sort(key=lambda x: (channel_key(x[0]), -x[2]))
 
-    # 保存结果到文件
-    with open("iptv.txt", 'w', encoding='utf-8') as file:
-        for result in results:
-            file.write(f"{result[0]},{result[1]},{result[2]}\n")
-
-    result_counter = 8  # 每个频道需要的个数
-
-    with open("itvlist.txt", 'w', encoding='utf-8') as file:
-        channel_counters = {}
-        file.write('央视频道,#genre#\n')
-        for result in results:
-            channel_name, channel_url, speed = result
-            if 'CCTV' in channel_name:
-                if channel_name in channel_counters:
-                    if channel_counters[channel_name] >= result_counter:
-                        continue
-                    else:
-                        file.write(f"{channel_name},{channel_url}\n")
-                        channel_counters[channel_name] += 1
-                else:
-                    file.write(f"{channel_name},{channel_url}\n")
-                    channel_counters[channel_name] = 1
-        channel_counters = {}
-        file.write('卫视频道,#genre#\n')
-        for result in results:
-            channel_name, channel_url, speed = result
-            if '卫视' in channel_name:
-                if channel_name in channel_counters:
-                    if channel_counters[channel_name] >= result_counter:
-                        continue
-                    else:
-                        file.write(f"{channel_name},{channel_url}\n")
-                        channel_counters[channel_name] += 1
-                else:
-                    file.write(f"{channel_name},{channel_url}\n")
-                    channel_counters[channel_name] = 1
-        channel_counters = {}
-        file.write('其他频道,#genre#\n')
-        for result in results:
-            channel_name, channel_url, speed = result
-            if 'CCTV' not in channel_name and '卫视' not in channel_name and '测试' not in channel_name:
-                if channel_name in channel_counters:
-                    if channel_counters[channel_name] >= result_counter:
-                        continue
-                    else:
-                        file.write(f"{channel_name},{channel_url}\n")
-                        channel_counters[channel_name] += 1
-                else:
-                    file.write(f"{channel_name},{channel_url}\n")
-                    channel_counters[channel_name] = 1
-
+    # 输出唯一文件 iptv.txt
+    result_counter = 8
+    with open(OUTPUT_FILE, 'w', encoding='utf-8') as f:
+        # 央视频道
+        f.write('央视频道,#genre#\n')
+        cctv_map = {}
+        for name, url, speed in speed_results:
+            if 'CCTV' in name:
+                cnt = cctv_map.get(name, 0)
+                if cnt < result_counter:
+                    f.write(f"{name},{url}\n")
+                    cctv_map[name] = cnt + 1
+        # 卫视频道
+        f.write('卫视频道,#genre#\n')
+        ws_map = {}
+        for name, url, speed in speed_results:
+            if '卫视' in name:
+                cnt = ws_map.get(name, 0)
+                if cnt < result_counter:
+                    f.write(f"{name},{url}\n")
+                    ws_map[name] = cnt + 1
+        # 其他频道
+        f.write('其他频道,#genre#\n')
+        other_map = {}
+        for name, url, speed in speed_results:
+            if 'CCTV' not in name and '卫视' not in name and '测试' not in name:
+                cnt = other_map.get(name, 0)
+                if cnt < result_counter:
+                    f.write(f"{name},{url}\n")
+                    other_map[name] = cnt + 1
+    print(f"扫描完成，频道列表已保存至：{OUTPUT_FILE}")
 
 if __name__ == "__main__":
     asyncio.run(main())
