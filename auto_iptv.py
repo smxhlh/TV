@@ -139,7 +139,7 @@ def read_git_iptv(repo_path: str):
     if not os.path.exists(file_full):
         print(f"⚠️ {DATA_BRANCH}分支下 {IPTV_FILENAME} 不存在，无旧频道")
         return old_channels
-    with open(file_full, "r", encoding="utf‑8") as f:
+    with open(file_full, "r", encoding="utf-8") as f:
         for line in f:
             line = line.strip()
             if not line:
@@ -161,8 +161,9 @@ async def modify_urls(url):
     ip_address = url[ip_start_index:ip_end_index]
     port = url[ip_end_index:]
     ip_end = "/iptv/live/1000.json?key=txiptv"
+    # 修复：全部使用半角减号 -
     for i in range(1, 256):
-        modified_ip = f"{ip_address[:‑1]}{i}"
+        modified_ip = f"{ip_address[:-1]}{i}"
         modified_url = f"{base_url}{modified_ip}{port}{ip_end}"
         modified_urls.append(modified_url)
     return modified_urls
@@ -173,7 +174,7 @@ async def is_url_accessible(session, url, semaphore):
         try:
             async with session.get(url, timeout=0.5) as response:
                 if response.status == 200:
-                    current_time = datetime.datetime.now().strftime("%Y‑%m‑%d %H:%M:%S")
+                    current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     print(f"{current_time} {url}")
                     return url
         except (aiohttp.ClientError, asyncio.TimeoutError):
@@ -233,7 +234,7 @@ async def fetch_json(session, url, semaphore):
                                 name = name.replace("＋", "+")
                                 name = name.replace("(", "")
                                 name = name.replace(")", "")
-                                name = re.sub(r"CCTV(\\d+)台", r"CCTV\\1", name)
+                                name = re.sub(r"CCTV(\d+)台", r"CCTV\1", name)
                                 name = name.replace("CCTV1综合", "CCTV1")
                                 name = name.replace("CCTV2财经", "CCTV2")
                                 name = name.replace("CCTV3综艺", "CCTV3")
@@ -301,7 +302,7 @@ async def main():
         x_urls.append(x_url)
     unique_urls = set(x_urls)
 
-    semaphore = asyncio.Semaphore(500)
+    semaphore = asyncio.Semaphore(300)
     scan_new_channels = []
     async with aiohttp.ClientSession() as session:
         scan_valid_api = await check_urls(session, unique_urls, semaphore)
@@ -349,12 +350,12 @@ async def main():
                     os.remove(ts_lists_0)
                     valid_after_test.append((channel_name, channel_url, f"{normalized_speed:.3f} MB/s"))
                     progress = (len(valid_after_test)+len(error_channels)) / len(all_to_test)*100
-                    now = datetime.datetime.now().strftime("%Y‑%m‑%d %H:%M:%S")
+                    now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     print(f"{now} 可用:{len(valid_after_test)} 失效:{len(error_channels)} 进度:{progress:.2f}%")
             except Exception:
                 error_channels.append((channel_name, channel_url))
                 progress = (len(valid_after_test)+len(error_channels)) / len(all_to_test)*100
-                now = datetime.datetime.now().strftime("%Y‑%m‑%d %H:%M:%S")
+                now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 print(f"{now} 可用:{len(valid_after_test)} 失效:{len(error_channels)} 进度:{progress:.2f}%")
             task_queue.task_done()
 
@@ -381,7 +382,7 @@ async def main():
 
     # 输出写入master分支下的iptv.txt
     output_file = os.path.join(GIT_REPO_LOCAL_PATH, IPTV_FILENAME)
-    with open(output_file, 'w', encoding='utf‑8') as file:
+    with open(output_file, 'w', encoding='utf-8') as file:
         channel_counters = {}
         file.write('央视频道,#genre#\n')
         for result in final_list:
