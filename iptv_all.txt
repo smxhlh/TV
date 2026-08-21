@@ -3,21 +3,22 @@
 # 规则：频道强制统一CCTV1~CCTV17，纯数字自动转换，无裸数字输出；高清优先，不足5条补480P
 
 央视频道,#genre#
-CCTV3,http://1.28.123.148:9901/tsfile/live/1028_1.m3u8?key=txiptv&playlive=1&authid=0
+CCTV1,http://113.57.140.161:10081/newlive/live/hls/1/live.m3u8
+CCTV3,http://113.57.140.161:10081/newlive/live/hls/3/live.m3u8
+CCTV4,http://113.57.140.161:10081/newlive/live/hls/4/live.m3u8
 CCTV4,http://112.30.73.119:229/tsfile/live/0004_1.m3u8?key=txiptv&playlive=1&authid=0
-CCTV4,http://113.9.214.47:9003/hls/4/index.m3u8
 CCTV8,http://1.28.123.148:9901/tsfile/live/1030_1.m3u8?key=txiptv&playlive=1&authid=0
 CCTV9,http://112.30.73.119:229/tsfile/live/0009_1.m3u8?key=txiptv&playlive=1&authid=0
+CCTV10,http://113.57.140.161:10081/newlive/live/hls/11/live.m3u8
 CCTV11,http://112.30.73.119:229/tsfile/live/0011_1.m3u8?key=txiptv&playlive=1&authid=0
-CCTV12,http://1.28.123.148:9901/tsfile/live/1034_1.m3u8?key=txiptv&playlive=1&authid=0
-CCTV13,http://1.28.123.148:9901/tsfile/live/1035_1.m3u8?key=txiptv&playlive=1&authid=0
+CCTV16,http://113.57.140.161:10081/newlive/live/hls/17/live.m3u8
 
 影视,#genre#
-4K电影,http://111.59.139.82:11888/tsfile/live/1098_1.m3u8?key=txiptv&playlive=1&authid=0
-动作电影,http://111.59.139.82:11888/tsfile/live/1059_1.m3u8?key=txiptv&playlive=1&authid=0
 家庭影院,http://111.59.139.82:11888/tsfile/live/1058_1.m3u8?key=txiptv&playlive=1&authid=0
 电影,http://111.59.139.82:11888/tsfile/live/1060_1.m3u8?key=txiptv&playlive=1&authid=0
 
 卫视频道,#genre#
 安徽卫视,http://123.138.216.44:9901/tsfile/live/0130_1.m3u8?key=txiptv&playlive=1&authid=0
 河南卫视,http://111.59.139.82:11888/tsfile/live/0139_1.m3u8?key=txiptv&playlive=1&authid=0
+湖北卫视,http://113.57.140.161:10081/newlive/live/hls/36/live.m3u8
+湖南卫视,http://113.57.140.161:10081/newlive/live/hls/30/live.m3u8
