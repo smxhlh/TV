@@ -1,5 +1,5 @@
 name: IPTV全流程合并自动更新
-run-name: IPTV_all全更新
+run-name: IPTV测速+分拣+auto_iptv全量更新
 permissions:
   contents: write
 concurrency:
@@ -44,7 +44,7 @@ jobs:
         with:
           python-version: "3.11"
 
-      # 安装系统依赖ffmpeg + python全部依赖包
+      # 安装系统依赖与Python依赖
       - name: 安装系统依赖与Python依赖
         run: |
           sudo apt update
@@ -60,9 +60,19 @@ jobs:
       - name: 执行频道分拣脚本 main.py
         run: python main.py
 
-      # 3、执行auto_iptv.py脚本
+      # ✨关键修复：暂存前面脚本生成的本地修改，避免auto_iptv执行git checkout报错
+      - name: 暂存本地未提交修改
+        run: |
+          git stash push -m "stash before run auto_iptv"
+
+      # 3、执行 auto_iptv.py脚本
       - name: 执行 auto_iptv.py
         run: python auto_iptv.py
+
+      # ✨恢复之前暂存的文件改动
+      - name: 恢复暂存的本地修改
+        run: |
+          git stash pop || true
 
       # 检测变更，先rebase拉远程再提交推送，解决fetch‑first报错
       - name: 检测变更并提交推送
