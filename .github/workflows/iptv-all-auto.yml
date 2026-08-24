@@ -14,7 +14,6 @@ on:
       - 'iptv_sort.py'
       - '.github/workflows/iptv-all-auto.yml'
       - 'main.py'
-      - 'new.py'
       - 'requirements.txt'
   schedule:
     # 北京时间06:00 = UTC前一日22:00
@@ -25,8 +24,6 @@ on:
 jobs:
   task:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write # 必须，允许action提交推送代码
     steps:
       # 拉取仓库代码
       - uses: actions/checkout@v4
@@ -43,18 +40,12 @@ jobs:
           sudo apt update
           sudo apt install -y ffmpeg
           pip install aiohttp requests eventlet
-          python -m pip install --upgrade pip
-          pip install aiohttp requests eventlet gitpython
           
-      # 1、采集源
-      - name: 执行采集脚本 new.py
-        run: python new.py
-
-      # 2、测速脚本（依赖ffmpeg，现已预装）
+      # 1、测速脚本（依赖ffmpeg，现已预装）
       - name: 执行测速脚本 iptv_sort.py
         run: python iptv_sort.py
 
-      # 3、频道整理分拣
+      # 2、频道整理分拣
       - name: 执行频道分拣脚本 main.py
         run: python main.py
 
