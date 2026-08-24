@@ -25,6 +25,8 @@ on:
 jobs:
   task:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # 必须，允许action提交推送代码
     steps:
       # 拉取仓库代码
       - uses: actions/checkout@v4
