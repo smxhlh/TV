@@ -963,10 +963,10 @@ async def main():
                     channel_counters[cn] = 1
 
         channel_counters = {}
-        file.write('卫视频道,#genre#\n')
+        file.write('本地频道,#genre#\n')
         for result in final_list:
             cn, cu, sp = result
-            if '卫视' in cn:
+            if '河南' in cn:
                 if cn in channel_counters:
                     if channel_counters[cn] >= result_counter:
                         continue
@@ -977,10 +977,10 @@ async def main():
                     channel_counters[cn] =1
 
         channel_counters = {}
-        file.write('本地频道,#genre#\n')
+        file.write('卫视频道,#genre#\n')
         for result in final_list:
             cn, cu, sp = result
-            if '河南' in cn:
+            if '卫视' in cn:
                 if cn in channel_counters:
                     if channel_counters[cn] >= result_counter:
                         continue
