@@ -41,7 +41,9 @@ jobs:
           sudo apt update
           sudo apt install -y ffmpeg
           pip install aiohttp requests eventlet
-
+          python -m pip install --upgrade pip
+          pip install aiohttp requests eventlet gitpython
+          
       # 1、采集源
       - name: 执行采集脚本 new.py
         run: python new.py
