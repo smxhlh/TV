@@ -49,6 +49,23 @@ jobs:
       - name: 执行频道分拣脚本 main.py
         run: python main.py
 
+      # 备份脚本生成的txt输出到临时目录
+      - name: 备份脚本输出txt文件
+        run: |
+          mkdir -p ./tmp_output
+          cp *.txt ./tmp_output/ || true
+
+      # 获取远程最新代码，强制重置本地工作区对齐远程，解决旧代码fetch‑first推送拒绝漏洞
+      - name: 对齐远程最新版本
+        run: |
+          git fetch origin
+          git reset --hard origin/main
+
+      # 恢复脚本刚刚生成的最新txt，覆盖远程拉取下来的旧txt
+      - name: 恢复最新生成的txt文件
+        run: |
+          cp ./tmp_output/*.txt ./ || true
+
       # 统一检测变更并提交推送
       - name: 检测变更并提交推送
         run: |
@@ -60,6 +77,6 @@ jobs:
           if [ "$CHANNEL_CHANGE" -eq 0 ]; then
             echo "所有频道文件无有效数据变更，跳过提交推送"
           else
-            git commit -m "🤖 IPTV全流程自动更新 $(date '+%Y-%m-%d %H:%M')"
+            git commit -m "🤖 IPTV全流程自动更新 $(TZ=Asia/Shanghai date '+%Y-%m-%d %H:%M')"
             git push
           fi
