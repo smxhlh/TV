@@ -1,5 +1,5 @@
-name: IPTV全流程合并自动更新
-run-name: IPTV全量更新
+name: IPTV全流程自动更新
+run-name: IPTV测速+分拣全量更新
 permissions:
   contents: write
 concurrency:
@@ -13,7 +13,6 @@ on:
     paths:
       - 'iptv_sort.py'
       - 'main.py'
-      - 'auto_iptv.py'
       - '.github/workflows/iptv-full-auto.yml'
       - 'requirements.txt'
   schedule:
@@ -46,26 +45,17 @@ jobs:
           sudo apt update
           sudo apt install -y ffmpeg
           python -m pip install --upgrade pip
-          pip install aiohttp requests eventlet gitpython
+          pip install aiohttp requests eventlet
 
+      # 执行测速脚本
       - name: 执行测速脚本 iptv_sort.py
         run: python iptv_sort.py
 
+      # 执行频道分拣脚本
       - name: 执行频道分拣脚本 main.py
         run: python main.py
 
-      - name: 暂存本地未提交修改
-        run: |
-          git stash push -m "stash before run auto_iptv"
-
-      - name: 执行 auto_iptv.py
-        run: python auto_iptv.py
-
-      - name: 恢复暂存的本地修改
-        run: |
-          git stash pop || true
-
-      # =========【修复顺序】先pull rebase，再add统计变更 =========
+      # 先拉取远程最新代码，再处理变更提交，规避rebase报错
       - name: 拉取远程最新代码
         run: |
           git pull origin main --rebase
@@ -80,6 +70,6 @@ jobs:
           if [ "$CHANNEL_CHANGE" -eq 0 ]; then
             echo "所有频道文件无有效数据变更，跳过提交推送"
           else
-            git commit -m "🤖 IPTV合并全流程自动更新 $(date '+%Y-%m-%d %H:%M')"
+            git commit -m "🤖 IPTV全流程自动更新 $(date '+%Y-%m-%d %H:%M')"
             git push
           fi
