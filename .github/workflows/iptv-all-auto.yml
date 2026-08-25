@@ -1,19 +1,19 @@
 name: IPTV全流程自动更新
-run-name: IPTV测速+分拣全量更新
+run-name: IPTV自动测速+分拣+采集全量更新
 permissions:
   contents: write
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
-
+# 统一触发规则
 on:
   workflow_dispatch:
   push:
     branches: [ main, master ]
     paths:
       - 'iptv_sort.py'
+      - '.github/workflows/iptv-all-auto.yml'
       - 'main.py'
-      - '.github/workflows/iptv-full-auto.yml'
       - 'requirements.txt'
   schedule:
     # 北京时间06:00 = UTC前一日22:00
@@ -25,41 +25,31 @@ jobs:
   task:
     runs-on: ubuntu-latest
     steps:
+      # 拉取仓库代码
       - uses: actions/checkout@v4
-        with:
-          ref: main
-          fetch-depth: 0
 
+      # 配置Git身份（你的账号smxhlh）
       - name: 配置Git身份
         run: |
           git config user.name "smxhlh"
           git config user.email "smxhlh@github.com"
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
+      # 安装系统依赖ffmpeg + python库
       - name: 安装系统依赖与Python依赖
         run: |
           sudo apt update
           sudo apt install -y ffmpeg
-          python -m pip install --upgrade pip
           pip install aiohttp requests eventlet
-
-      # 执行测速脚本
+          
+      # 1、测速脚本（依赖ffmpeg，现已预装）
       - name: 执行测速脚本 iptv_sort.py
         run: python iptv_sort.py
 
-      # 执行频道分拣脚本
+      # 2、频道整理分拣
       - name: 执行频道分拣脚本 main.py
         run: python main.py
 
-      # 先拉取远程最新代码，再处理变更提交，规避rebase报错
-      - name: 拉取远程最新代码
-        run: |
-          git pull origin main --rebase
-
+      # 统一检测变更并提交推送
       - name: 检测变更并提交推送
         run: |
           git add *.txt
