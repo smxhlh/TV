@@ -1,5 +1,5 @@
 name: IPTV全流程合并自动更新
-run-name: IPTV测速+分拣+auto_iptv全量更新
+run-name: IPTV全量更新
 permissions:
   contents: write
 concurrency:
@@ -26,25 +26,21 @@ jobs:
   task:
     runs-on: ubuntu-latest
     steps:
-      # 完整拉取仓库全部git历史，解决rebase冲突
       - uses: actions/checkout@v4
         with:
           ref: main
           fetch-depth: 0
 
-      # 配置Git身份
       - name: 配置Git身份
         run: |
           git config user.name "smxhlh"
           git config user.email "smxhlh@github.com"
 
-      # 设置Python3.11环境
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      # 安装系统依赖与Python依赖
       - name: 安装系统依赖与Python依赖
         run: |
           sudo apt update
@@ -52,29 +48,28 @@ jobs:
           python -m pip install --upgrade pip
           pip install aiohttp requests eventlet gitpython
 
-      # 1、执行测速脚本 iptv_sort.py
       - name: 执行测速脚本 iptv_sort.py
         run: python iptv_sort.py
 
-      # 2、执行频道分拣脚本 main.py
       - name: 执行频道分拣脚本 main.py
         run: python main.py
 
-      # ✨关键修复：暂存前面脚本生成的本地修改，避免auto_iptv执行git checkout报错
       - name: 暂存本地未提交修改
         run: |
           git stash push -m "stash before run auto_iptv"
 
-      # 3、执行 auto_iptv.py脚本
       - name: 执行 auto_iptv.py
         run: python auto_iptv.py
 
-      # ✨恢复之前暂存的文件改动
       - name: 恢复暂存的本地修改
         run: |
           git stash pop || true
 
-      # 检测变更，先rebase拉远程再提交推送，解决fetch‑first报错
+      # =========【修复顺序】先pull rebase，再add统计变更 =========
+      - name: 拉取远程最新代码
+        run: |
+          git pull origin main --rebase
+
       - name: 检测变更并提交推送
         run: |
           git add *.txt
@@ -85,7 +80,6 @@ jobs:
           if [ "$CHANNEL_CHANGE" -eq 0 ]; then
             echo "所有频道文件无有效数据变更，跳过提交推送"
           else
-            git pull origin main --rebase
             git commit -m "🤖 IPTV合并全流程自动更新 $(date '+%Y-%m-%d %H:%M')"
             git push
           fi
