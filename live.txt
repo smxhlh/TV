@@ -17,11 +17,11 @@
         {
             "name": "直播3",
             "type": 0,
-            "url": "https://eastscreen.tv/iptvlist.php?token=LlNGGAEABxYCAwIWQlRIAQQJCQ",
+            "url": "https://eastscreen.tv/iptvlist.php?token=LlBABB0GCBYBBQYWQlVIAQQJCQ",
             "playerType": 2,
             "timeout": 10
         }
     ],
-    "update_seq": 110,
-    "last_update": "2026-09-20 08:22:47.806245"
+    "update_seq": 112,
+    "last_update": "2026-09-21 11:42:50.853168"
 }
