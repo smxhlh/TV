@@ -1,11 +1,9 @@
 央视频道,#genre#
 CCTV4,http://113.90.154.189:9901/tsfile/live/0004_1.m3u8?key=txiptv&playlive=1&authid=0
-CCTV6,http://113.90.154.189:9901/tsfile/live/0006_1.m3u8?key=txiptv&playlive=1&authid=0
+CCTV7,http://113.90.154.189:9901/tsfile/live/0007_1.m3u8?key=txiptv&playlive=1&authid=0
 CCTV8,http://113.90.154.189:9901/tsfile/live/0008_1.m3u8?key=txiptv&playlive=1&authid=0
-CCTV12,http://113.90.154.189:9901/tsfile/live/0012_1.m3u8?key=txiptv&playlive=1&authid=0
-CCTV15,http://113.90.154.189:9901/tsfile/live/0015_1.m3u8?key=txiptv&playlive=1&authid=0
+CCTV9,http://113.90.154.189:9901/tsfile/live/0009_1.m3u8?key=txiptv&playlive=1&authid=0
 CCTV17,http://113.90.154.189:9901/tsfile/live/0017_1.m3u8?key=txiptv&playlive=1&authid=0
 本地频道,#genre#
 卫视频道,#genre#
-广东卫视,http://113.90.154.189:9901/tsfile/live/1000_1.m3u8?key=txiptv&playlive=1&authid=0
 其他频道,#genre#
