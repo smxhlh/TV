@@ -1,62 +1,40 @@
-央视频道,#genre#
-CCTV17,https://live.264788.xyz/channel/cctv17?streamid=348c8c0c04a6d2b900e5a3bcb4af8ce1&livekey=01WgOR41rriMmMkzNsd0UoaxJRwetZdxIvtVk
-CCTV-1 HD (1080p),http://69.30.245.50/live/cctv1.m3u8
-CCTV-16 HD (1080p),http://74.91.26.218:82/live/cctv16hd.m3u8
-CCTV-4K HD (1080p),http://198.204.240.250:82/live/cctv4k.m3u8
-CCTV-6 [Geo-blocked],https://live.eac-news.com/CCTV/streams/cctv6.m3u8
-CCTV文化精品,https://live.264788.xyz/channel/yangshiwenhuajingpin?streamid=bc185d1ef1e528922e83efd845006277&livekey=01WgOR41rriMmMkzNsd0UoaxJRwetZdxIvtVk
-CCTV第一剧场,https://live.264788.xyz/channel/diyijuchang?streamid=e9b0fb1ca135a4aeae12944494883794&livekey=01WgOR41rriMmMkzNsd0UoaxJRwetZdxIvtVk
 电影频道,#genre#
-功夫电影,https://live.metshop.top/huya/11352941
 南宁影视娱乐,http://hls.nntv.cn/nnlive/YSYL_244.m3u8
-怪兽电影,https://live.metshop.top/huya/21059577
-电影高分动作,http://live.metshop.top/huya/11352884?cdn=alicdn
-韩国电影2,https://stream.ads.ottera.tv/playlist.m3u8?network_id=743
-韩国电影1,https://stream.ads.ottera.tv/playlist.m3u8?network_id=595
 卫视频道,#genre#
-东南卫视,http://live.zohi.tv/video/s10001-fztv-3/index.m3u8
-宁夏卫视,https://live.264788.xyz/channel/ningxiaweishi?streamid=e1236348f815c36a0429357e5b5c5f10&livekey=01WgOR41rriMmMkzNsd0UoaxJRwetZdxIvtVk
-四川卫视,https://live.264788.xyz/channel/sichuanweishi4k?streamid=401bf692a1a8b91298f26077d53316d6&livekey=01WgOR41rriMmMkzNsd0UoaxJRwetZdxIvtVk
-山西卫视,http://m3u8.channel.wsrtv.com.cn/cms/videos/nmip-media/channellive/channel7/playlist.m3u8
-宁夏卫视,https://live.264788.xyz/channel/ningxiaweishi?streamid=551474d02bee1c160e1692e22c45ddba&livekey=01WgOR41rriMmMkzNsd0UoaxJRwetZdxIvtVk
-新疆卫视,https://live.264788.xyz/channel/xinjiangweishi?streamid=4f481f56ae39ce5d24203471de9df635&livekey=01WgOR41rriMmMkzNsd0UoaxJRwetZdxIvtVk
-内蒙古卫视,https://live.264788.xyz/channel/neimengguweishi?streamid=81a015dbecf3031d7d847b7a9b059f67&livekey=01WgOR41rriMmMkzNsd0UoaxJRwetZdxIvtVk
+江西卫视,http://112.27.5.218:9901/tsfile/live/faacts/0138_1.m3u8?key=txiptv&playlive=1&authid=0
 其他频道,#genre#
-伊犁哈萨克,http://110.153.180.106:55555/out_3/index.m3u8
-兵团八师石河子新闻综合,http://124.88.144.73:1935/live/xwzh/playlist.m3u8?zxinjd
-南国都市,http://tencentplay.gztv.com/live/nanguodushi.m3u8?txSecret=140110ae3d6c936a77f94c4f4d85b0d3&txTime=18d57929bd4
-沐川综合,http://file.ysxtv.cn/cms/videos/nmip-media/channellive/channel4/playlist.m3u8?zsicd
+伊犁哈萨克,http://110.153.180.106:55555/out_3/index.m3u8?zxinjd
+文山州公共,http://m3u8.channel.wsrtv.com.cn/cms/videos/nmip-media/channellive/channel8/playlist.m3u8
+滨海新闻综合,http://traffic.jbh.tjbh.com/live/bhtv10/playlist.m3u8
 福州生活,http://live.zohi.tv:80/video/s10001-fztv-3/index.m3u8
-绍兴公共,http://live.shaoxing.com.cn/video/s10001-sxtv2/index.m3u8
+绍兴电视台公共,http://live.shaoxing.com.cn/video/s10001-sxtv2/index.m3u8?%E5%85%B3%E6%B3%A8%E5%BE%AE%E4%BF%A1%E5%85%AC%E4%BC%97%E5%8F%B7[%E6%99%B4%E5%9B%AD]
 长白朝语,http://hplayer1.juyun.tv:80/camera/11344136.m3u8
-音乐欣赏,http://61.221.215.25:8800/hls/49/index.m3u8
-兵器科技,https://live.264788.xyz/channel/bingqikeji?streamid=530cb4e58bbc48b7fc26f5e0a2e47966&livekey=01WgOR41rriMmMkzNsd0UoaxJRwetZdxIvtVk
+人与自然,http://newcntv.qcloudcdn.com/asp/hls/1200/0303000a/3/default/1425e1d505654cb48ba82b807b221193/1200.m3u8
+AMC音乐,https://AMChls.wns.live/hls/stream.m3u8
 广州综合,https://tencentplay.gztv.com/live/zonghes.m3u8?txSecret=439b0fd2cf766b363c93a59cbcbe1370&txTime=18d00acf488
-旺苍新闻综合,http://live.spccmc.com:90/live/spxwzh.m3u8?%E5%85%B3%E6%B3%A8%E5%BE%AE%E4%BF%A1%E5%85%AC%E4%BC%97%E5%8F%B7[%E6%99%B4%E5%9B%AD]
-BRTV Kaku Childrens Channel,http://223.111.191.105/downflv.brtvcloud.com/kkkkasd/winfr.m3u8
-BSTV (Hong Kong) (576p),http://202.69.67.66:443/webcast/bshdlive-pc/playlist.m3u8
-CGTN Global Biz (1080p),https://fastlive.cctvplus.com/out/v1/2b3d8a0c805d437f9dc85b764c2ac599/index.m3u8
-CETV-1 (576p),http://117.161.133.51:81/gitv_live/G_CETV-1/G_CETV-1.m3u8?p=GITV
-CHC Home Theater (1080p),http://39.134.19.153/dbiptv.sn.chinamobile.com/PLTV/88888888/224/3221226462/index.m3u8
-China Weather Channel (576p) [Not 24/7],http://hls.weathertv.cn/tslslive/qCFIfHB/hls/live_sd.m3u8
-FTV (Taiwan) (720p) [Not 24/7],http://seb.sason.top/ptv/ftv.php?id=ms
+泸县新闻综合,http://lxfile.lxxcb.cn/nmip-media/channellive/channel103799/playlist.m3u8?zsicd
+8TV,http://cdn6.163189.xyz/163189/8tv
+Ando TV (1080p),http://play.kankanlive.com/live/1711956137852982.m3u8
+Channel U (720p),https://cdn.qd.je/163189/chu
+Celestial Movies (576i),http://103.58.160.157:8278/720-CELESTIALMOVIES/playlist.m3u8
+China Travel (1080p),https://fastlive.cctvplus.com/out/v1/ca6f9297b7314a63959435028af287fc/index.m3u8
+CHC Action (1080p),http://39.134.19.68/dbiptv.sn.chinamobile.com/PLTV/88888888/224/3221226465/index.m3u8
+CND Film Discovery Channel (576p),http://125.210.152.18:9090/live/FXZL_750.m3u8
+CTi Variety (720p),http://23.237.10.66:16372
+EBC News (1080p) [Not 24/7],http://seb.sason.top/sc/dsxw_fhd.m3u8
+Guangdong Satellite TV,https://h5cul1yar48um3t.wcetv.com/hls/gdsatellite.m3u8
 Fengshang Shopping Channel (1080p),http://183.207.248.71/cntv/live1/fengshanggw/fengshanggw
-Golden Eagle Cartoon (576p),http://223.110.245.145/ott.js.chinamobile.com/PLTV/3/224/3221226303/index.m3u8
-Hezheng TV,http://117.156.28.119/270000001111/1110000149/index.m3u8
+Guangzhou TV,https://tencentplaybusiness.gztv.com/live/zonghes.m3u8
+Guizhou TV (576p),http://183.207.248.71/gitv/live1/G_GUIZHOU/G_GUIZHOU
+Hebei TV (2160p),https://event.pull.hebtv.com/live/live101.m3u8
 Jilin City Channel,https://lsfb.avap.jilintv.cn/zqvk7vpj/channel/7e8474e6daea44ccaa5aa2300191439e/index.m3u8
-Jilin Rural Channel,https://lsfb.avap.jilintv.cn/zqvk7vpj/channel/3ffc4824dce54b92be185555923ce382/index.m3u8
-Kangba TV,http://110.185.237.164:8888/hls/30/index.m3u8
+Jiangsu Public & News Channel (576p),http://183.207.248.71/gitv/live1/G_JSGG/G_JSGG
 Liaoning TV (1080p),http://39.134.39.37/PLTV/88888888/224/3221226209/index.m3u8
-Jingmen Comprehensive News Channel,https://stream.jmtv.com.cn/xwzh/sd/live.m3u8?_upt=341f4b8e1791883036
-Phoenix Chinese Channel (720p),http://223.110.245.139/ott.js.chinamobile.com/PLTV/3/224/3221226922/index.m3u8
-Phoenix InfoNews Channel (720p),http://223.110.245.167/ott.js.chinamobile.com/PLTV/3/224/3221226923/index.m3u8
-Shandong Satellite TV (720p),http://125.210.152.18:9090/live/SDWSHD_H265.m3u8
+Luxe TV (1080p),http://103.154.3.101:5001/live/1736.m3u8
+Ningxia Satellite Channel (576p),http://39.134.115.163:8080/PLTV/88888910/224/3221225726/index.m3u8
+SET News (1080p) [Geo-blocked],http://seb.sason.top/sc/sllive_fhd.m3u8
+QTV-4,http://video10.qtv.com.cn/drm/qtv4at/manifest.m3u8
 Sichuan Satellite TV (576p),http://39.134.115.163:8080/PLTV/88888910/224/3221225733/index.m3u8
+Taiwan Indigenous TV (720p),https://streamipcfapp.akamaized.net/live/_definst_/live_720/key_b1500.m3u8
 TDM Information (720p) [Not 24/7],https://live3.tdm.com.mo/ch5/info_ch5.live/playlist.m3u8
-WCETV Digital Channel 31.8,https://h5cul1yar48um3t.wcetv.com/hls/wcetv318.m3u8
-Xi'an Business Information Channel (180p) [Not 24/7],http://stream2.xiancity.cn/xatv3/playlist.m3u8
-Xi'an Silk Road Channel (404p) [Not 24/7],http://stream2.xiancity.cn/xatv5/playlist.m3u8
-Xuzhou Economic Life Channel (1080p),http://223.110.245.167/ott.js.chinamobile.com/PLTV/3/224/3221225947/index.m3u8
-Yanbian Satellite TV (576p),http://223.110.245.139/PLTV/4/224/3221227008/index.m3u8
 You Man Cartoon Channel (576p),http://183.207.249.15/PLTV/4/224/3221225933/index.m3u8
-Xinjiang TV 1,https://klmysjtzb.rcsxzx.com/hls/klmy2.m3u8
