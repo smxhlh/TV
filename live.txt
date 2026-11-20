@@ -3,7 +3,7 @@
         {
             "name": "直播1",
             "type": 0,
-            "url": "https://eastscreen.tv/iptvlist.php?token=LlNDAh0DAwAeAwAAVFNADAQGCQA",
+            "url": "https://eastscreen.tv/iptvlist.php?token=LlBFGAEABBYECx8KSldIAQQJCQ",
             "playerType": 2,
             "timeout": 10
         },
@@ -17,11 +17,11 @@
         {
             "name": "直播3",
             "type": 0,
-            "url": "https://eastscreen.tv/iptvlist.php?token=LlRCGAIGCBYBCwYWTlhBBgMB",
+            "url": "https://eastscreen.tv/iptvlist.php?token=LlRCGAIHAhYCAwIWQ1hFAQsJ",
             "playerType": 2,
             "timeout": 10
         }
     ],
-    "update_seq": 127,
-    "last_update": "2026-11-17 08:23:53.391614"
+    "update_seq": 128,
+    "last_update": "2026-11-20 08:47:54.380129"
 }
