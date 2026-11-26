@@ -1,48 +1,55 @@
 央视频道,#genre#
-CCTV1,http://119.166.53.110:85/tsfile/live/00001_1.m3u8?authid=0&key=txiptv&playlive=1
-CCTV2,http://119.166.53.110:85/tsfile/live/00002_1.m3u8?authid=0&key=txiptv&playlive=1
+CCTV17,https://live.264788.xyz/channel/cctv17?streamid=f9c36f1e95b5b35eac89cc89583e7c0a&livekey=01WgOR41rriMmMkzNsd0UoaxJRwetZdxIvtVk
 CCTV-4 America,https://h5cul1yar48um3t.wcetv.com/hls/cctv4.m3u8
 CCTV4,http://119.166.53.110:85/tsfile/live/00004_1.m3u8?authid=0&key=txiptv&playlive=1
-CCTV12,http://119.166.53.110:85/tsfile/live/00012_1.m3u8?authid=0&key=txiptv&playlive=1
 CCTV13,http://119.166.53.110:85/tsfile/live/00013_1.m3u8?authid=0&key=txiptv&playlive=1
-CCTV14,http://119.166.53.110:85/tsfile/live/00014_1.m3u8?authid=0&key=txiptv&playlive=1
+CCTV16,http://119.166.53.110:85/tsfile/live/00016_1.m3u8?authid=0&key=txiptv&playlive=1
+CCTV17,http://119.166.53.110:85/tsfile/live/00017_1.m3u8?authid=0&key=txiptv&playlive=1
 吉林卫视,http://221.7.175.154:8445/tsfile/live/1014_1.m3u8?key=txiptv&playlive=1&authid=0
 QTV-4,http://119.166.53.110:85/tsfile/live/1004_1.m3u8?authid=0&key=txiptv&playlive=1
 电影频道,#genre#
-电影高分动作,http://live.metshop.top/huya/11352884?cdn=alicdn
+古天乐电影,https://live.metshop.top/huya/29982675
 卫视频道,#genre#
-天津卫视,http://222.169.85.8:9901/tsfile/live/0135_1.m3u8?key=txiptv&playlive=1&authid=0
+贵州卫视,https://live.264788.xyz/channel/guizhouweishi?streamid=091bd59ea031989839c23459bb8cc9d4&livekey=01WgOR41rriMmMkzNsd0UoaxJRwetZdxIvtVk
+四川卫视,https://live.264788.xyz/channel/sichuanweishi4k?streamid=21be5901ee81559c827dc84e46f26452&livekey=01WgOR41rriMmMkzNsd0UoaxJRwetZdxIvtVk
+东南卫视,http://live.zohi.tv/video/s10001-fztv-3/index.m3u8
+江西卫视,https://live.264788.xyz/channel/jiangxiweishi?streamid=555198f31caa33506ac6abb70d788959&livekey=01WgOR41rriMmMkzNsd0UoaxJRwetZdxIvtVk
+江苏卫视,http://125.43.249.76:9901/tsfile/live/1030_1.m3u8?key=txiptv&playlive=1&authid=0
 其他频道,#genre#
-楚汉骄雄,https://live.metshop.top/huya/29465854
+兵器科技,https://live.264788.xyz/channel/bingqikeji?streamid=6fc55a0966bdad1e1cdf39a4d37dd776&livekey=01WgOR41rriMmMkzNsd0UoaxJRwetZdxIvtVk
+活佛济公3,https://live.metshop.top/huya/23903123
+野蛮亲家,https://live.metshop.top/huya/23863796
+金枝欲孽,https://live.metshop.top/huya/29465847
+鹿鼎记,https://live.metshop.top/huya/23650774
 福州少儿,http://live.zohi.tv/video/s10001-fztv-4/index.m3u8
-万州三峡移民,http://123.146.162.24:8017/c2F0hmi/1000/live.m3u8
-常熟民生,http://3gvod.zjgonline.com.cn:1935/live/_definst_/shehuishenghuo_app/chunklist.m3u8
+南国都市,https://tencentplay.gztv.com/live/nanguodushi.m3u8?txSecret=550af55c0ea34ce492748481415b6dfa&txTime=1903e7b17de
+剑阁综合,https://m3u8.channel.dzsm.com/nmip-media/channellive/channel105549/playlist.m3u8
+南国都市,http://tencentplay.gztv.com/live/nanguodushi.m3u8?txSecret=140110ae3d6c936a77f94c4f4d85b0d3&txTime=18d57929bd4
 广元综合,https://m3u8.channel.dzsm.com/nmip-media/channellive/channel100999/playlist.m3u8
-文山州公共,http://m3u8.channel.wsrtv.com.cn/cms/videos/nmip-media/channellive/channel8/playlist.m3u8
-旺苍新闻综合,http://channel.wcrmt.cn:80/nmip-media/channellive/channel105268/playlist.m3u8
-番禺综合,http://video.epaper.pybtv.cn:8080/live/rtmp_live_demo.flv
-绍兴电视台公共,http://live.shaoxing.com.cn/video/s10001-sxtv2/index.m3u8?%E5%85%B3%E6%B3%A8%E5%BE%AE%E4%BF%A1%E5%85%AC%E4%BC%97%E5%8F%B7[%E6%99%B4%E5%9B%AD]
-荥经综合,https://m3u8channel-yj.yunxya.com/nmip-media/channellive/channel101140/playlist.m3u8
-黑龙江都市,https://idclive.hljtv.com:4430/live/dushi_hd.m3u8
-魅力音乐,http://125.43.249.76:9901/tsfile/live/1000_1.m3u8?key=txiptv&playlive=1&authid=0
-CGTN (1080p),https://amg00405-rakutentv-cgtn-rakuten-i9tar.amagi.tv/master.m3u8
+广州综合,https://tencentplay.gztv.com/live/zonghes.m3u8?txSecret=f0147ae6453a80f5989f382368b72aad&txTime=18d00acf487
+音乐欣赏,http://61.221.215.25:8800/hls/49/index.m3u8
+兵器科技,https://live.264788.xyz/channel/bingqikeji?streamid=530cb4e58bbc48b7fc26f5e0a2e47966&livekey=01WgOR41rriMmMkzNsd0UoaxJRwetZdxIvtVk
+金鹰卡通,http://125.43.249.76:9901/tsfile/live/1040_1.m3u8?key=txiptv&playlive=1&authid=0
+福建旅游,https://live.264788.xyz/channel/fujianlvyou?streamid=221239fcf3c7edb274f2f0760fe47f96&livekey=01WgOR41rriMmMkzNsd0UoaxJRwetZdxIvtVk
+CHC Action (1080p),http://39.134.19.68/dbiptv.sn.chinamobile.com/PLTV/88888888/224/3221226465/index.m3u8
 CHC Home Theater (1080p),http://39.134.19.153/dbiptv.sn.chinamobile.com/PLTV/88888888/224/3221226462/index.m3u8
-CTS News [Geo-blocked],http://seb.sason.top/sc/hsxw_fhd.m3u8
-DAAI TV,https://pull.daaiplus.com/live-DAAIPLUS/live-DAAIPLUS_HD.m3u8
-Guangdong TV America,https://h5cul1yar48um3t.wcetv.com/hls/gdtv.m3u8
-Jiangsu Educational Channel (576p),http://223.110.245.151/ott.js.chinamobile.com/PLTV/3/224/3221225923/index.m3u8
-Jilin City Channel,https://lsfb.avap.jilintv.cn/zqvk7vpj/channel/7e8474e6daea44ccaa5aa2300191439e/index.m3u8
-Jilin Rural Channel,https://lsfb.avap.jilintv.cn/zqvk7vpj/channel/3ffc4824dce54b92be185555923ce382/index.m3u8
+Chuzhou News Channel (1080p),http://live.cztv.cc:85/live/xwpd.m3u8
+Chuzhou Public Channel (400p),http://live.cztv.cc:85/live/ggpd.m3u8
+FTV (Taiwan) (720p) [Not 24/7],http://seb.sason.top/ptv/ftv.php?id=ms
+CTi Variety (720p),http://23.237.10.66:16372
+Documentary Humanities Channel (1080p),http://39.135.138.59:18890/PLTV/88888910/224/3221225655/index.m3u8
+Fengshang Shopping Channel (1080p),http://183.207.248.71/cntv/live1/fengshanggw/fengshanggw
+Guizhou TV (576p),http://183.207.248.71/gitv/live1/G_GUIZHOU/G_GUIZHOU
+Hebei TV (2160p),https://event.pull.hebtv.com/live/live101.m3u8
+Heilongjiang TV (1080p),http://223.110.245.161/ott.js.chinamobile.com/PLTV/3/224/3221227492/index.m3u8
+Jiangsu Satellite TV (1080p),http://39.134.24.166/dbiptv.sn.chinamobile.com/PLTV/88888890/224/3221226200/index.m3u8
+Jiangsu Variety Channel (576p) [Not 24/7],http://183.207.248.71/gitv/live1/G_JSZY/G_JSZY
 Jiuquan TV News Comprehensive Channel (576p),http://117.156.28.119/270000001111/1110000001/index.m3u8
-Liangshan TV [Not 24/7],http://118.122.2.29:9999/hls/47/index.m3u8
-PTS 3,http://111.59.139.85:11888/tsfile/live/1222_1.m3u8?key=txiptv
-Qinghai TV (576p),http://39.134.115.163:8080/PLTV/88888910/224/3221225727/index.m3u8
+Mei Ah Movie Channel (1080p),http://103.172.187.30:12000/stream/mytv/null-2/master.m3u8
 QTV-6,http://119.166.53.110:85/tsfile/live/0002_1.m3u8?authid=0&key=txiptv&playlive=1
-QTV-2,http://video10.qtv.com.cn/drm/qtv2at/manifest.m3u8
-Shandong Satellite TV (720p),http://125.210.152.18:9090/live/SDWSHD_H265.m3u8
-Shandong TV (1080p),http://39.134.115.163:8080/PLTV/88888910/224/3221225697/index.m3u8
-SJTV,http://111.59.139.85:11888/tsfile/live/1220_1.m3u8?key=txiptv
-Tonghua TV (1080p),http://lsfb.avap.jilintv.cn/zqvk7vpj/channel/43ea5771aa44421591f9dfd2b71f1b9b/index.m3u8
-TDM Sports (720p),https://live3.tdm.com.mo/ch4/sport_ch4.live/playlist.m3u8
+Sichuan Satellite TV (576p),http://39.134.115.163:8080/PLTV/88888910/224/3221225733/index.m3u8
 Tianjin TV (1080p),http://39.134.115.163:8080/PLTV/88888910/224/3221225698/index.m3u8
-ViuTV (1080i),http://php.jdshipin.com/TVOD/iptv.php?id=viutv
+TDM Sports (720p),https://live3.tdm.com.mo/ch4/sport_ch4.live/playlist.m3u8
+Xi'an Silk Road Channel (404p) [Not 24/7],http://stream2.xiancity.cn/xatv5/playlist.m3u8
+You Man Cartoon Channel (576p),http://183.207.249.15/PLTV/4/224/3221225933/index.m3u8
+Zhejiang Satellite TV (1080p),http://39.134.115.163:8080/PLTV/88888910/224/3221225703/index.m3u8
